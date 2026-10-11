@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "node build.mjs",
     "ios:sync": "npm run build && cap sync ios",
     "ios:open": "cap open ios"
   },
