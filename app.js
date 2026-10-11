@@ -21,7 +21,7 @@ var sb = window.supabase.createClient(SB_URL, SB_KEY);
 mode = 'db';
 function setStatus(t) { $('#status').textContent = t; }
 function mapProduct(r) { return { id: r.id, name: r.name, cat: r.category || 'أخرى', price: r.price == null ? null : Number(r.price), sizes: r.sizes || null, active: r.active !== false }; }
-function mapOrder(r) { var c = Date.parse(r.created_at), pd = r.paid_at ? Date.parse(r.paid_at) : c; return { id: r.id, cts: c, ts: pd, items: (r.items || []).filter(function(i){return !i.__pos_adjustment;}), adjustments: (r.items || []).filter(function(i){return i.__pos_adjustment;}), total: Number(r.total), method: r.method, type: r.order_type, paid: r.paid, number: r.number, customer: r.customer || null, state: r.state || 'completed', refundedAt: r.refunded_at ? Date.parse(r.refunded_at) : 0, refundedBy: r.refunded_by || '', reason: r.refund_reason || '' }; }
+function mapOrder(r) { var c = Date.parse(r.created_at), pd = r.paid_at ? Date.parse(r.paid_at) : c; return { id: r.id, cts: c, ts: pd, items: (r.items || []).filter(function(i){return !i.__pos_adjustment;}), adjustments: (r.items || []).filter(function(i){return i.__pos_adjustment;}), total: Number(r.total), method: r.method, type: r.order_type, paid: r.paid, number: r.day_number || r.number, businessDayId:r.business_day_id || null, customer: r.customer || null, state: r.state || 'completed', refundedAt: r.refunded_at ? Date.parse(r.refunded_at) : 0, refundedBy: r.refunded_by || '', reason: r.refund_reason || '' }; }
 function mapCustomer(r) { return { id: r.id, ts: Date.parse(r.created_at), name: r.name, phone: r.phone, address: r.address || '' }; }
 function mapStaff(r) { return { id: r.email, email: r.email, role: r.role }; }
 function mapExpense(r) { return { tillId: r.till_session_id || null, category:r.category||'', note:r.note||'', id: r.id, ts: Date.parse(r.created_at), title: r.title, amount: Number(r.amount) }; }
@@ -40,7 +40,8 @@ return out;
 async function reload() {
 try {
 var adm = S.role === 'admin';
-var res = await Promise.all([fetchAll('products'), fetchAll('orders'), adm ? fetchAll('expenses') : Promise.resolve([]), adm ? fetchAll('staff') : Promise.resolve([]), fetchAll('customers')]);
+var res = await Promise.all([fetchAll('products'), fetchAll('orders'), adm ? fetchAll('expenses') : Promise.resolve([]), adm ? fetchAll('staff') : Promise.resolve([]), fetchAll('customers'), sb.from('pos_business_days').select('id').eq('state','open').single()]);
+if(res[5].error)throw res[5].error;S.businessDayId=res[5].data.id;
 S.categories = Array.from(new Set(res[0].map(function(r){return r.category || 'أخرى';}))); S.products = res[0].filter(function(r){return r.name !== '__pos_category__';}).map(mapProduct); S.orders = res[1].map(mapOrder); S.sales = S.orders.filter(function (x) { return x.state === 'completed'; }); S.expenses = res[2].map(mapExpense); S.staff = res[3].map(mapStaff); S.customers = res[4].map(mapCustomer);
 if(window.Till)await Till.refresh();
 S.loading = false; setStatus('متصل');
@@ -167,11 +168,8 @@ function adjustmentItems() {var a=cartAmounts(),out=[];if(S.discount)out.push({_
 function clearAdjustments(){S.discount=0;S.deliveryFee=0;$('#delivery-fee').value='';}
 
 function qtyOf(id) { return Object.keys(S.cart).reduce(function (t, k) { return k.split('|')[0] === id ? t + S.cart[k] : t; }, 0); }
-function todayNums() {
-var m = {}, st = startOfDay(0);
-S.orders.filter(function (x) { return x.cts >= st; }).sort(function (a, b) { return a.cts - b.cts; }).forEach(function (x, i) { m[x.id] = i + 1; });
-return m;
-}
+function todayNums() {var m={};S.orders.forEach(function(x){m[x.id]=x.number;});return m;}
+
 function catList() {
 var seen = {}, out = S.categories.slice(); out.forEach(function(c){seen[c]=1;});
 S.products.forEach(function (p) { var c = p.cat || 'أخرى'; if (!seen[c]) { seen[c] = 1; out.push(c); } });
@@ -311,7 +309,7 @@ var by = { active: [], completed: [], refunded: [], cancelled: [] };
 S.orders.forEach(function (x) {
 if (x.state === 'active') by.active.push(x);
 else if (x.state === 'refunded') { if (S.role === 'admin' || x.cts >= st) by.refunded.push(x); }
-else if (by[x.state] && (x.cts >= st || x.ts >= st)) by[x.state].push(x);
+else if (by[x.state] && (x.businessDayId ? x.businessDayId===S.businessDayId : x.cts >= st || x.ts >= st)) by[x.state].push(x);
 });
 by.active.sort(function (a, b) { return a.cts - b.cts; });
 by.completed.sort(function (a, b) { return b.ts - a.ts; });

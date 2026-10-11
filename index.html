@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="4.0">
+<meta name="app-version" content="5.0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -291,10 +291,10 @@ h1,h2,h3,p{overflow-wrap:anywhere}.brand h1{font-size:1.35rem}.top{padding:12px 
 </div>
 <div class="scrim" id="discountscrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="discount-title"><h3 id="discount-title">خصم على الطلب</h3><p class="note">يُحسب على قيمة المنتجات قبل رسوم الدليفري.</p><label for="discount-input">نسبة الخصم %</label><input class="in num" id="discount-input" type="number" min="0" max="100" step="0.5" inputmode="decimal" placeholder="10"><div class="chips"><button class="chip" data-discount-preset="5">5%</button><button class="chip" data-discount-preset="10">10%</button><button class="chip" data-discount-preset="15">15%</button><button class="chip" data-discount-preset="20">20%</button></div><button class="btn" id="discount-apply">تطبيق الخصم</button><button class="btn ghost" id="discount-close">إلغاء</button></div></div>
 <div class="scrim" id="productscrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="product-title"><h3 id="product-title">منتج جديد</h3><label for="edit-name">اسم المنتج</label><input class="in" id="edit-name" maxlength="120"><label for="edit-category">التصنيف</label><select class="in" id="edit-category"></select><div class="price-fields"><label>سعر M أو السعر الموحد<input class="in num" id="edit-price" type="number" min="0" step="0.01" inputmode="decimal"></label><label>سعر L — اختياري<input class="in num" id="edit-lprice" type="number" min="0" step="0.01" inputmode="decimal"></label></div><label><input type="checkbox" id="edit-active" checked> متاح للبيع</label><p class="neg-v" id="product-error" role="alert"></p><button class="btn" id="product-save">حفظ المنتج</button><button class="btn ghost" id="product-cancel">إلغاء</button></div></div>
-<div class="scrim" id="till-close-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="till-close-title"><h3 id="till-close-title">إغلاق العهدة</h3><p class="note">عدّ كل الكاش الموجود في الدرج، بما فيه مبلغ البداية. بعد الإغلاق لا يمكن تعديل العهدة.</p><label for="till-close-count">المبلغ الفعلي في الدرج (ج.م)</label><input class="in num" id="till-close-count" type="number" min="0" max="1000000000" step="0.01" inputmode="decimal"><label for="till-close-note">ملاحظة — اختياري</label><input class="in" id="till-close-note" maxlength="500"><p id="till-close-error" role="alert"></p><button class="btn" id="till-close-confirm">إغلاق وحفظ وطباعة الملخص</button><button class="btn ghost" id="till-close-cancel">إلغاء</button></div></div>
+<div class="scrim" id="till-close-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="till-close-title"><h3 id="till-close-title">إنهاء اليوم</h3><p class="note">عدّ كل الكاش الموجود في الدرج، بما فيه مبلغ البداية. بعد الإغلاق لا يمكن تعديل العهدة.</p><label for="till-close-count">المبلغ الفعلي في الدرج (ج.م)</label><input class="in num" id="till-close-count" type="number" min="0" max="1000000000" step="0.01" inputmode="decimal"><label for="till-close-note">ملاحظة — اختياري</label><input class="in" id="till-close-note" maxlength="500"><p id="till-close-error" role="alert"></p><button class="btn" id="till-close-confirm">إنهاء اليوم وحفظ للأدمن</button><button class="btn ghost" id="till-close-cancel">إلغاء</button></div></div>
 <div class="toast" id="toast" hidden role="status"></div>
 <script src="native-print.js"></script>
-<script src="till.js"></script>
-<script src="app.js?v=9"></script>
+<script src="till.js?v=5"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
