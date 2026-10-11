@@ -51,7 +51,7 @@ async function receipt(order, role, number) {
   add('────────────────────────');
   order.items.forEach(function (item) {
     add(item.q + ' × ' + item.n);
-    if (item.note) add('ملاحظة: ' + item.note);
+    if (role !== 'cashier' && item.note) add('ملاحظة: ' + item.note);
     if (role === 'cashier') add((item.q * item.p).toFixed(2) + ' ج.م');
   });
   if (role === 'cashier') {

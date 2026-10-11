@@ -1,0 +1,18 @@
+(function(){
+'use strict';var ctx,target=null,afterClear=null,busy=false;
+function el(id){return document.getElementById(id);}
+var messages={PIN_NOT_CONFIGURED:'الأدمن لازم يحدد رمز الإلغاء أولًا',PIN_INVALID:'رمز الإلغاء غير صحيح',PIN_LOCKED:'محاولات كثيرة؛ حاول بعد 10 دقائق أو اطلب من الأدمن الإلغاء بحسابه',REFUND_REQUIRED:'الطلب محصّل؛ المرتجع متاح للأدمن فقط',ORDER_NOT_FOUND:'الطلب غير موجود',PIN_FORMAT:'الرمز لازم يكون من 4 إلى 12 رقمًا'};
+function message(code){return messages[code]||'تعذر تنفيذ العملية؛ راجع الاتصال';}
+async function rpc(name,args){var r=await ctx.client.rpc(name,args);if(r.error)throw r.error;return r.data;}
+function close(){el('cancel-code-dialog').hidden=true;el('cancel-code').value='';el('cancel-reason').value='';target=null;afterClear=null;}
+function open(orderId,callback){if(busy)return;target=orderId;afterClear=callback||null;el('cancel-code').value='';el('cancel-reason').value='';el('cancel-code-error').textContent='';el('cancel-code-title').textContent=orderId?'اعتماد إلغاء الطلب':'اعتماد تفريغ السلة';el('cancel-code-dialog').hidden=false;el('cancel-code').focus();}
+document.addEventListener('click',async function(event){var b=event.target.closest('button');if(!b||!ctx)return;
+if(b.id==='cancel-code-dismiss'){if(!busy)close();return;}
+if(b.id==='cancel-code-confirm'){if(busy)return;var pin=el('cancel-code').value.trim();if(!/^[0-9]{4,12}$/.test(pin)){el('cancel-code-error').textContent=messages.PIN_FORMAT;return;}busy=true;b.disabled=true;try{var r=target?await rpc('cancel_order',{p_order:target,p_pin:pin,p_reason:el('cancel-reason').value.trim()}):await rpc('authorize_cart_clear',{p_pin:pin});el('cancel-code').value='';if(!r.ok){el('cancel-code-error').textContent=message(r.error);return;}var callback=afterClear;close();if(callback)callback();else await ctx.reload();ctx.toast('تم اعتماد الإلغاء');}catch(e){el('cancel-code').value='';el('cancel-code-error').textContent=message();}finally{busy=false;b.disabled=false;}return;}
+if(b.id==='admin-cancel-security'){if(ctx.role()!=='admin')return;el('admin-cancel-pin').value='';el('admin-cancel-pin-again').value='';el('admin-cancel-pin-message').textContent='جاري تحميل الحالة…';el('admin-cancel-pin-dialog').hidden=false;try{var r=await rpc('cancel_pin_status',{});el('admin-cancel-pin-message').textContent=r.configured?'رمز الإلغاء محدد. تقدر تستبدله برمز جديد.':'لم يتم تحديد رمز بعد؛ إلغاء الكاشير متوقف حتى تحديده.';}catch(e){el('admin-cancel-pin-message').textContent=message();}return;}
+if(b.id==='admin-cancel-pin-dismiss'){if(!busy)el('admin-cancel-pin-dialog').hidden=true;return;}
+if(b.id==='admin-cancel-pin-save'){if(busy||ctx.role()!=='admin')return;var pin=el('admin-cancel-pin').value.trim(),again=el('admin-cancel-pin-again').value.trim();if(!/^[0-9]{4,12}$/.test(pin)){el('admin-cancel-pin-message').textContent=messages.PIN_FORMAT;return;}if(pin!==again){el('admin-cancel-pin-message').textContent='تأكيد الرمز غير مطابق';return;}busy=true;b.disabled=true;try{await rpc('set_cancel_pin',{p_pin:pin});el('admin-cancel-pin').value='';el('admin-cancel-pin-again').value='';el('admin-cancel-pin-dialog').hidden=true;ctx.toast('تم حفظ رمز اعتماد الإلغاء');}catch(e){el('admin-cancel-pin-message').textContent=message();}finally{busy=false;b.disabled=false;}}
+});
+document.addEventListener('keydown',function(event){if(event.key==='Escape'&&!busy){close();el('admin-cancel-pin-dialog').hidden=true;}});
+window.CancelSecurity={init:function(options){ctx=options;},open:open,reset:function(){close();el('admin-cancel-pin-dialog').hidden=true;el('admin-cancel-pin').value='';el('admin-cancel-pin-again').value='';}};
+})();

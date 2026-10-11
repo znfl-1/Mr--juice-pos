@@ -21,9 +21,9 @@ var sb = window.supabase.createClient(SB_URL, SB_KEY);
 mode = 'db';
 function setStatus(t) { $('#status').textContent = t; }
 function mapProduct(r) { return { id: r.id, name: r.name, cat: r.category || 'أخرى', price: r.price == null ? null : Number(r.price), sizes: r.sizes || null, active: r.active !== false }; }
-function mapOrder(r) { var c = Date.parse(r.created_at), pd = r.paid_at ? Date.parse(r.paid_at) : c; return { id: r.id, cts: c, ts: pd, items: (r.items || []).filter(function(i){return !i.__pos_adjustment;}), adjustments: (r.items || []).filter(function(i){return i.__pos_adjustment;}), total: Number(r.total), method: r.method, type: r.order_type, paid: r.paid, number: r.day_number || r.number, businessDayId:r.business_day_id || null, customer: r.customer || null, state: r.state || 'completed', refundedAt: r.refunded_at ? Date.parse(r.refunded_at) : 0, refundedBy: r.refunded_by || '', reason: r.refund_reason || '' }; }
+function mapOrder(r) { var c = Date.parse(r.created_at), pd = r.paid_at ? Date.parse(r.paid_at) : c; return { id: r.id, cts: c, ts: pd, items: (r.items || []).filter(function(i){return !i.__pos_adjustment;}), adjustments: (r.items || []).filter(function(i){return i.__pos_adjustment;}), total: Number(r.total), method: r.method, type: r.order_type, paid: r.paid, cancelledAt:r.cancelled_at||null,createdByName:r.created_by_name||'موظف',paidByName:r.paid_by_name||'',cancelledBy:r.cancelled_by_name||'موظف',cancelReason:r.cancel_reason||'',number: r.day_number || r.number, businessDayId:r.business_day_id || null, customer: r.customer || null, state: r.state || 'completed', refundedAt: r.refunded_at ? Date.parse(r.refunded_at) : 0, refundedBy: r.refunded_by_name || 'موظف', reason: r.refund_reason || '' }; }
 function mapCustomer(r) { return { id: r.id, ts: Date.parse(r.created_at), name: r.name, phone: r.phone, address: r.address || '' }; }
-function mapStaff(r) { return { id: r.email, email: r.email, role: r.role }; }
+function mapStaff(r) { return { id: r.email, email: r.email, role: r.role, name:r.display_name || (r.role==='admin'?'أدمن':'كاشير') }; }
 function mapExpense(r) { return { tillId: r.till_session_id || null, category:r.category||'', note:r.note||'', id: r.id, ts: Date.parse(r.created_at), title: r.title, amount: Number(r.amount) }; }
 async function fetchAll(table) {
 var out = [], from = 0;
@@ -52,7 +52,7 @@ async function addDoc(col, obj) {
 var r;
 if (col === 'products') r = await sb.from('products').insert({ name: obj.name, category: obj.cat, price: obj.price == null ? null : obj.price, sizes: obj.sizes || null, active: obj.active !== false });
 else if (col === 'sales') r = await sb.from('orders').insert({ items: obj.items, total: obj.total, method: obj.method, paid: obj.paid == null ? null : obj.paid, order_type: obj.type || 'dine', customer: obj.customer || null, state: obj.state || 'completed' });
-else if (col === 'staff') r = await sb.from('staff').insert({ email: obj.email, role: obj.role });
+else if (col === 'staff') r = await sb.from('staff').insert({ email: obj.email, role: obj.role, display_name:obj.name||'' });
 else r = await sb.from('expenses').insert({ title: obj.title, amount: obj.amount });
 if (r.error) throw r.error;
 await reload();
@@ -63,6 +63,7 @@ if (r.error) throw r.error;
 await reload();
 }
 async function orderUpdate(id, patch) {
+if(patch.state==='cancelled'){var approval=await sb.rpc('cancel_order',{p_order:id,p_pin:null,p_reason:''});if(approval.error||!approval.data.ok)throw approval.error||new Error(approval.data.error);await reload();return;}
 if(patch.state==='refunded'&&window.Till&&!Till.requireOpen())throw new Error('OPEN_TILL_REQUIRED');
 var r = await sb.from('orders').update(patch).eq('id', id);
 if (r.error) throw r.error;
@@ -90,16 +91,16 @@ function showLogin(msg) { document.body.classList.remove('authed', 'is-admin'); 
 async function enter(session) {
 var email = (session.user.email || '').toLowerCase();
 myEmail = email;
-var r = await sb.from('staff').select('email,role').eq('email', email);
+var r = await sb.from('staff').select('email,role,display_name').eq('email', email);
 if (!r.error && !r.data.length) {
 await sb.from('staff').insert({ email: email, role: 'admin' });
-r = await sb.from('staff').select('email,role').eq('email', email);
+r = await sb.from('staff').select('email,role,display_name').eq('email', email);
 }
 if (r.error || !r.data.length) { await sb.auth.signOut(); showLogin('الحساب ده غير مصرح له بالدخول. اطلب من المسؤول إضافته.'); return; }
 S.role = r.data[0].role === 'admin' ? 'admin' : 'cashier';
 document.body.classList.add('authed');
 document.body.classList.toggle('is-admin', S.role === 'admin');
-if (S.role !== 'admin' && (S.view === 'admin' || S.view === 'products')) setView('pos');
+if(S.role==='admin')setView('admin');else if(['admin','products','printing'].includes(S.view))setView('pos');
 S.loading = true; renderAll();
 await reload();
 if (!listening) { listening = true; listen(); }
@@ -259,6 +260,7 @@ return '<button data-size="' + z + '" data-pid="' + esc(p.id) + '">' + SIZE[z] +
 $('#scrim').hidden = false;
 }
 async function checkout(state) {
+if(S.role==='admin')return toast('إنشاء الطلبات من حساب الكاشير');
 state = state || 'completed';
 var items = cartItems(); if (!items.length || S.busy) return;
 if(window.Till&&!Till.requireOpen())return;
@@ -289,13 +291,15 @@ function itemsHtml(x) {
 return (x.items || []).map(function (i) { return '<div class="oi">' + (i.q > 1 ? i.q + '× ' : '') + esc(i.n) + (i.note ? ' <span class="onote">— ' + esc(i.note) + '</span>' : '') + '</div>'; }).join('');
 }
 function orderRow(x, nums) {
-var small = timeFmt(x.cts) + ' · ' + (TYPE[x.type] || 'صالة') + (x.state === 'completed' ? ' · ' + (x.method === 'card' ? 'فيزا' : 'كاش') : x.state === 'active' ? ' · ' + minsSince(x.cts) : '');
+var small = 'بواسطة '+esc(x.createdByName)+(x.paidByName?' · التحصيل: '+esc(x.paidByName):'')+' · '+timeFmt(x.cts) + ' · ' + (TYPE[x.type] || 'صالة') + (x.state === 'completed' ? ' · ' + (x.method === 'card' ? 'فيزا' : 'كاش') : x.state === 'active' ? ' · ' + minsSince(x.cts) : '');
 var cust = x.customer ? '<small>' + esc(x.customer.name) + ' · <span class="num">' + esc(x.customer.phone) + '</span>' + (x.customer.address ? ' · ' + esc(x.customer.address) : '') + '</small>' : '';
 var info = '';
 if (x.state === 'refunded') info = '<small class="neg-v">مرتجع ' + dateFmt(x.refundedAt || x.cts) + ' ' + timeFmt(x.refundedAt || x.cts) + (x.refundedBy ? ' · ' + esc(x.refundedBy) : '') + (x.reason ? ' · ' + esc(x.reason) : '') + '</small>';
+if(x.state==='cancelled'&&S.role==='admin')info+='<small>ألغاه: '+esc(x.cancelledBy)+(x.cancelReason?' · السبب: '+esc(x.cancelReason):'')+'</small>';
 var adjustmentSummary=(x.adjustments||[]).map(function(a){return '<small>'+esc(a.n)+': '+money(a.amount)+'</small>';}).join('');
 var acts = '';
-if (x.state === 'active') acts = '<button class="btn sm" data-pay="' + esc(x.id) + '">تحصيل</button>' + delBtn('ocancel', x.id, 'إلغاء');
+if (x.state === 'active' && S.role==='admin') acts=delBtn('ocancel',x.id,'إلغاء');
+else if (x.state === 'active') acts = '<button class="btn sm" data-pay="' + esc(x.id) + '">تحصيل</button>' + delBtn('ocancel', x.id, 'إلغاء');
 else if (x.state === 'completed' && S.role === 'admin') acts = delBtn('orefund', x.id, 'مرتجع');
 if (window.JuicePrint && JuicePrint.available && (x.state === 'active' || x.state === 'completed')) {
 acts += '<button class="btn sm" data-print="' + esc(x.id) + '" data-role="kitchen">طباعة المطبخ</button>';
@@ -351,7 +355,7 @@ out += '<text x="' + cx + '" y="' + (H - 9) + '" text-anchor="middle" font-size=
 return out + '</svg>';
 }
 var myEmail = '';
-var ADMIN_IDS = ['s-email', 'e-title', 'e-amt', 'p-name', 'p-cat', 'p-price', 'p-lprice', 'cu-q', 'cu-name', 'cu-phone', 'cu-addr', 'report-from', 'report-to'];
+var ADMIN_IDS = ['s-name', 's-email', 'e-title', 'e-amt', 'p-name', 'p-cat', 'p-price', 'p-lprice', 'cu-q', 'cu-name', 'cu-phone', 'cu-addr', 'report-from', 'report-to'];
 function renderProducts() {
 var cats=catList();
 $('#view-products').innerHTML='<div class="bar"><div><h2>المنتجات والتصنيفات</h2><p class="note">المنيو والأسعار والأحجام في مكان واحد</p></div><button class="btn sm" id="product-new">+ منتج جديد</button></div>'+ '<div class="product-layout"><aside class="card"><h3>التصنيفات <small>'+cats.length+'</small></h3><div class="category-create"><input class="in" id="category-name" placeholder="تصنيف جديد" aria-label="اسم التصنيف"><button class="btn sm" id="cat-add">إضافة</button></div><button class="category-button" data-manage-cat="">كل المنتجات <span class="num">'+S.products.length+'</span></button>'+cats.map(function(c){var count=S.products.filter(function(p){return p.cat===c;}).length;return '<div class="category-manage"><button class="category-button '+(S.productCat===c?'selected':'')+'" data-manage-cat="'+esc(c)+'">'+esc(c)+' <span class="num">'+count+'</span></button><div class="category-actions"><button data-cat-rename="'+esc(c)+'">تعديل</button><button data-cat-delete="'+esc(c)+'">حذف</button></div></div>';}).join('')+'</aside><section class="card"><div class="bar"><h3>'+(S.productCat?esc(S.productCat):'كل المنتجات')+'</h3><span class="pill">M / L</span></div><input class="in" id="product-search" type="search" placeholder="بحث باسم المنتج" value="'+esc(S.productQ)+'"><div id="product-rows"></div></section></div>';
@@ -419,13 +423,15 @@ $('#view-admin').innerHTML =
 (top.length ? top.map(function (t) { return '<div class="row"><div class="t">' + esc(t.n) + '<small class="num">' + t.q + ' قطعة</small><div class="meter"><b style="width:' + Math.max(4, t.r / topMax * 100) + '%"></b></div></div><div class="a num">' + money(t.r) + '</div></div>'; }).join('') : '<div class="empty">لا مبيعات في هذه الفترة</div>') + '</div></section></div>' +
 refCard +
 '<section class="card"><h3>عهدات الكاشير</h3><p class="note">مراجعة مبيعات ومصروفات كل عهدة والكاش المتوقع والفعلي والعجز والزيادة.</p><button class="btn sm" id="admin-tills">عرض العهدات</button></section>' +
+'<section class="card"><h3>صلاحيات الإلغاء</h3><p class="note">حدد رمز اعتماد لإلغاء طلبات الكاشير وتفريغ السلة. الأدمن يلغي مباشرة بدون رمز.</p><button class="btn sm" id="admin-cancel-security">تحديد أو تغيير رمز الإلغاء</button></section>'+
+'<section class="card"><h3>إعدادات الطباعة</h3><p class="note">اختيار أوراق الكاشير والمطبخ والتحكم في ظهور الملاحظات.</p><button class="btn sm" id="open-printing">فتح إعدادات الطباعة</button></section>'+
 '<section class="card"><h3>تصميم الإيصال</h3><p>عدّل اللوجو والنصوص وأحجام الخطوط وشوف معاينة قبل الطباعة.</p><a href="receipt-editor.html">فتح محرّر الإيصال</a></section>' +
 '<section class="card"><h3>المصروفات <small>' + names[S.range] + '</small></h3>' +
 '<div class="form"><input class="in" id="e-title" placeholder="بند المصروف (إيجار، كهرباء، فواكه…)" autocomplete="off"><input class="in num" id="e-amt" inputmode="decimal" placeholder="المبلغ" autocomplete="off"><button class="btn sm" id="e-add">تسجيل</button></div>' +
 '<div class="rows">' + (expList.length ? expList.map(function (x) { return '<div class="row"><div class="t">' + esc(x.title) + '<small class="num">' + dateFmt(x.ts) + ' · ' + timeFmt(x.ts) + '</small></div><div class="a num neg-v">' + money(Number(x.amount)) + '</div>' + (x.tillId?'<span class="pill">مصروف عهدة</span>':delBtn('expenses', x.id, 'حذف')) + '</div>'; }).join('') : '<div class="empty">لا مصروفات مسجلة في هذه الفترة</div>') + '</div></section>' +
 '<section class="card"><h3>الموظفون <small>' + S.staff.length + ' حساب</small></h3>' +
-'<div class="form"><input class="in" id="s-email" type="email" inputmode="email" placeholder="بريد الموظف" autocomplete="off"><select class="in" id="s-role"><option value="cashier">كاشير</option><option value="admin">أدمن</option></select><button class="btn sm" id="s-add">إضافة</button></div>' +
-'<div class="rows">' + S.staff.map(function (m) { return '<div class="row"><div class="t"><span class="num">' + esc(m.email) + '</span><small>' + (m.role === 'admin' ? 'أدمن' : 'كاشير') + '</small></div><span></span>' + (m.email === myEmail ? '<span class="note">أنت</span>' : delBtn('staff', m.email, 'حذف')) + '</div>'; }).join('') + '</div>' +
+'<div class="form"><input class="in" id="s-name" maxlength="80" placeholder="اسم العرض — كاشير ١"><input class="in" id="s-email" type="email" inputmode="email" placeholder="بريد الموظف" autocomplete="off"><select class="in" id="s-role"><option value="cashier">كاشير</option><option value="admin">أدمن</option></select><button class="btn sm" id="s-add">إضافة</button></div>' +
+'<div class="rows">' + S.staff.map(function (m) { return '<div class="row"><div class="t"><b>'+esc(m.name)+'</b><small class="num">'+esc(m.email)+'</small><small>' + (m.role === 'admin' ? 'أدمن' : 'كاشير') + '</small></div><button class="chip" data-staff-name="'+esc(m.email)+'">تعديل الاسم</button>' + (m.email === myEmail ? '<span class="note">أنت</span>' : delBtn('staff', m.email, 'حذف')) + '</div>'; }).join('') + '</div>' +
 '<p class="note">بعد إضافة البريد، الموظف يفتح الرابط ويضغط "إنشاء حساب جديد" بنفس البريد ويختار كلمة مروره.</p></section>' +
 '<section class="card"><h3>المنتجات والتصنيفات</h3><p class="note">إدارة الأصناف والأسعار والأحجام في صفحة مستقلة.</p><button class="btn sm" id="open-products">إدارة المنتجات</button></section>' +
 '<p class="note">' + (mode === 'db' ? 'البيانات محفوظة ومتزامنة بين كل الأجهزة المسجلة بنفس الحساب.' : 'البيانات محفوظة على هذا الجهاز فقط ولا تظهر على أجهزة أخرى.') + '</p>';
@@ -521,6 +527,7 @@ else { ch.style.color = 'var(--bad)'; $('#pay-change-v').textContent = money(o.t
 } else ch.hidden = true;
 }
 async function confirmPay() {
+if(S.role==='admin')return toast('التحصيل من حساب الكاشير');
 var o = payOrder(); if (!o) return;
 if(window.Till&&!Till.requireOpen())return;
 var paid = parseFloat(S.payPaid);
@@ -533,15 +540,17 @@ $('#payscrim').hidden = true; S.payId = null; toast('تم تحصيل الطلب 
 btn.disabled = false;
 }
 function setView(v) {
-if ((v==='admin'||v==='products') && S.role!=='admin') v='pos';
+if(S.role==='admin'&&v==='pos')v='admin';
+if ((v==='admin'||v==='products'||v==='printing') && S.role!=='admin') v='pos';
 S.view = v;
-['pos', 'orders', 'customers', 'admin', 'products', 'till'].forEach(function (k) { $('#view-' + k).hidden = k !== v; $('#nav-' + k).setAttribute('aria-pressed', String(k === v)); });
+['pos', 'orders', 'customers', 'admin', 'products', 'till', 'printing'].forEach(function (k) { $('#view-' + k).hidden = k !== v; $('#nav-' + k).setAttribute('aria-pressed', String(k === v)); });
 try { localStorage.setItem(LS + 'view', v); } catch (e) {}
 window.scrollTo(0, 0);
 renderAll();
 }
 function renderAll() {
-if (S.view === 'till' && window.Till) Till.render();
+if (S.view === 'printing' && window.PrintSettings) PrintSettings.render();
+else if (S.view === 'till' && window.Till) Till.render();
 else if (S.view === 'pos') renderPos();
 else if (S.view === 'orders') renderOrders();
 else {
@@ -590,8 +599,10 @@ return;
 }
 if (t.id === 'logout') { await sb.auth.signOut(); return; }
 if (t.id === 'import-menu') { t.disabled = true; try { await importMenu(); toast('تم استيراد المنيو'); } catch (err) { toast('تعذر الاستيراد'); t.disabled = false; } return; }
+if(t.dataset.staffName){if(S.role!=='admin')return;var member=S.staff.find(function(m){return m.email===t.dataset.staffName;});var chosen=prompt('اسم العرض للموظف',member?member.name:'');if(chosen===null)return;if(!chosen.trim()||chosen.trim().length>80)return toast('اكتب اسمًا من 1 إلى 80 حرفًا');var renamed=await sb.rpc('set_staff_display_name',{p_email:t.dataset.staffName,p_name:chosen.trim()});if(renamed.error)return toast('تعذر تغيير الاسم');await reload();return toast('تم تغيير اسم الموظف');}
 if (t.id === 'nav-pos') { S.cat = null; S.q = ''; $('#q').value = ''; return setView('pos'); }
 if (t.id === 'nav-orders') return setView('orders');
+if(t.id==='nav-printing'||t.id==='open-printing')return setView('printing');
 if (t.id === 'nav-admin') return setView('admin');
 if (t.id === 'nav-products' || t.id === 'open-products') return setView('products');
 if (t.id === 'nav-cart') return $('#cart-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -607,9 +618,11 @@ if (t.dataset.inc) { S.cart[t.dataset.inc]++; return renderPos(); }
 if (t.dataset.dec) { var k = t.dataset.dec; S.cart[k]--; if (S.cart[k] <= 0) delete S.cart[k]; return renderPos(); }
 if (t.dataset.m) { S.method = t.dataset.m; return renderCart(); }
 if (t.dataset.t) { S.otype = t.dataset.t; if(S.otype!=='delivery'){S.deliveryFee=0;$('#delivery-fee').value='';} renderCart(); return renderCust(true); }
+if(t.id==='clear'&&S.role!=='admin'&&Object.keys(S.cart).length){return CancelSecurity.open(null,function(){S.cart={};clearAdjustments();S.paid='';$('#paid').value='';renderPos();});}
 if (t.id === 'clear') { S.cart = {}; clearAdjustments(); S.paid = ''; $('#paid').value = ''; return renderPos(); }
 if (t.id === 'checkout') return checkout();
 if (t.dataset.range) { S.range = t.dataset.range; return renderAdmin(); }
+if(t.dataset.del&&t.dataset.del.startsWith('ocancel:')&&S.role!=='admin'){return CancelSecurity.open(t.dataset.del.slice(8));}
 if (t.dataset.del) {
 if (S.armed === t.dataset.del) {
 var pr = t.dataset.del.split(':'); S.armed = '';
@@ -674,7 +687,7 @@ return renderAll();
 if (t.id === 's-add') {
 var se = $('#s-email').value.trim().toLowerCase();
 if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(se)) return toast('اكتب بريد صحيح للموظف');
-try { await addDoc('staff', { email: se, role: $('#s-role').value }); $('#s-email').value = ''; toast('تمت إضافة الموظف'); } catch (err) { toast('تعذر الحفظ، ربما البريد مضاف بالفعل'); }
+try { await addDoc('staff', { email: se, role: $('#s-role').value, name:$('#s-name').value.trim() }); $('#s-email').value = ''; $('#s-name').value='';toast('تمت إضافة الموظف'); } catch (err) { toast('تعذر الحفظ، ربما البريد مضاف بالفعل'); }
 return renderAll();
 }
 if (t.id === 'p-add') {
@@ -704,11 +717,15 @@ async function boot() {
 var v = 'pos';
 try { v = localStorage.getItem(LS + 'view') || 'pos'; } catch (e) {}
 setView(v === 'admin' || v === 'orders' || v === 'customers' || v === 'products' || v === 'till' ? v : 'pos');
-sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT') { S.products = []; S.sales = []; S.expenses = []; S.staff = []; S.customers = []; S.orders = []; S.cust = null; S.newCust = false; S.role = 'cashier'; S.cart = {}; clearAdjustments(); S.discount=0; if(window.Till)Till.reset();myEmail='';showLogin(); } });
+sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT') { S.products = []; S.sales = []; S.expenses = []; S.staff = []; S.customers = []; S.orders = []; S.cust = null; S.newCust = false; S.role = 'cashier'; S.cart = {}; clearAdjustments(); S.discount=0; if(window.CancelSecurity)CancelSecurity.reset();if(window.PrintSettings)PrintSettings.reset();if(window.Till)Till.reset();myEmail='';showLogin(); } });
 var r = await sb.auth.getSession();
 if (r.data.session) enter(r.data.session); else showLogin();
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){['discountscrim','productscrim'].forEach(function(id){$('#'+id).hidden=true;});}});
 if(window.Till)Till.init({client:sb,role:function(){return S.role;},email:function(){return myEmail;},onChange:reload,showMessage:toast,changeView:setView,amount:money,escape:esc});
+if(window.PrintSettings)PrintSettings.init({client:sb,role:function(){return S.role;},toast:toast});
+if(window.CancelSecurity)CancelSecurity.init({client:sb,role:function(){return S.role;},reload:reload,toast:toast});
 boot();
 })();
+
+

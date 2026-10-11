@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="5.0">
+<meta name="app-version" content="5.7">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -195,6 +195,8 @@ h1,h2,h3,p{overflow-wrap:anywhere}.brand h1{font-size:1.35rem}.top{padding:12px 
 @media(max-width:950px){.pos{grid-template-columns:1fr}.product-layout{grid-template-columns:1fr}.receipt{position:relative;top:0}.nav .cartbtn.on{display:flex}}@media(max-width:480px){.brand{gap:8px}.brand h1{font-size:1.15rem}.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.nav{padding-inline:2px;gap:0}.nav button{font-size:.66rem;max-width:none}.nav button svg{width:19px;height:19px}.date-range label{min-width:115px}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi .kv{font-size:1.25rem}.kpi{padding:12px}.form{grid-template-columns:1fr}.card{padding:12px}.in{font-size:16px}.category-create .in{min-width:0}}
 
 .till-open{background:var(--surface2);color:var(--accent);border-color:var(--accent)}.till-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}.till-form label{display:flex;flex-direction:column;gap:4px}.till-form .wide{grid-column:1/-1}.till-details{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.82rem;color:var(--muted)}.till-entries .row{grid-template-columns:minmax(0,1fr) auto}.kpi.negative .kv{color:var(--bad)}.kpi.positive .kv{color:var(--good)}.top{flex-wrap:wrap}#till-status{margin-inline-start:auto;font-size:.78rem}.till-report .kpis{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}@media(max-width:480px){.nav button{font-size:.61rem;min-width:0}.nav button svg{width:17px;height:17px}.top .brand{flex:1}#till-status{font-size:.72rem;padding-inline:8px}.till-form{grid-template-columns:1fr}.till-report .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+body:not(.is-admin) #nav-printing{display:none}
+body.is-admin #nav-pos,body.is-admin #nav-cart,body.is-admin #view-pos{display:none!important}
 </style>
 </head>
 <body>
@@ -251,6 +253,7 @@ h1,h2,h3,p{overflow-wrap:anywhere}.brand h1{font-size:1.35rem}.top{padding:12px 
 <main id="view-orders" class="page" hidden></main>
 <main id="view-customers" class="page" hidden></main>
 <main id="view-admin" class="page" hidden></main>
+<main id="view-printing" class="page" hidden></main>
 <main id="view-products" class="page" hidden></main>
 <main id="view-till" class="page" hidden></main>
 </div>
@@ -260,6 +263,7 @@ h1,h2,h3,p{overflow-wrap:anywhere}.brand h1{font-size:1.35rem}.top{padding:12px 
 <button id="nav-customers" aria-pressed="false"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.7 3.2 2.5 3.5 5.2"/></svg>العملاء</button>
 <button id="nav-admin" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>لوحة الأدمن</button>
 <button id="nav-till" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M7 6V3h10v3M3 12h18M10 16h4"/></svg>العهدة</button>
+<button id="nav-printing" aria-pressed="false">الطباعة</button>
 <button id="nav-products" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></svg>المنتجات</button>
 <button class="cartbtn" id="nav-cart"><svg viewBox="0 0 24 24"><path d="M6 6h15l-2 9H8zM6 6L5 3H2M9 20h.01M18 20h.01"/></svg><b class="num" id="nav-total">0 ج.م</b></button>
 </nav>
@@ -293,8 +297,12 @@ h1,h2,h3,p{overflow-wrap:anywhere}.brand h1{font-size:1.35rem}.top{padding:12px 
 <div class="scrim" id="productscrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="product-title"><h3 id="product-title">منتج جديد</h3><label for="edit-name">اسم المنتج</label><input class="in" id="edit-name" maxlength="120"><label for="edit-category">التصنيف</label><select class="in" id="edit-category"></select><div class="price-fields"><label>سعر M أو السعر الموحد<input class="in num" id="edit-price" type="number" min="0" step="0.01" inputmode="decimal"></label><label>سعر L — اختياري<input class="in num" id="edit-lprice" type="number" min="0" step="0.01" inputmode="decimal"></label></div><label><input type="checkbox" id="edit-active" checked> متاح للبيع</label><p class="neg-v" id="product-error" role="alert"></p><button class="btn" id="product-save">حفظ المنتج</button><button class="btn ghost" id="product-cancel">إلغاء</button></div></div>
 <div class="scrim" id="till-close-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="till-close-title"><h3 id="till-close-title">إنهاء اليوم</h3><p class="note">عدّ كل الكاش الموجود في الدرج، بما فيه مبلغ البداية. بعد الإغلاق لا يمكن تعديل العهدة.</p><label for="till-close-count">المبلغ الفعلي في الدرج (ج.م)</label><input class="in num" id="till-close-count" type="number" min="0" max="1000000000" step="0.01" inputmode="decimal"><label for="till-close-note">ملاحظة — اختياري</label><input class="in" id="till-close-note" maxlength="500"><p id="till-close-error" role="alert"></p><button class="btn" id="till-close-confirm">إنهاء اليوم وحفظ للأدمن</button><button class="btn ghost" id="till-close-cancel">إلغاء</button></div></div>
 <div class="toast" id="toast" hidden role="status"></div>
+<div class="scrim" id="cancel-code-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cancel-code-title"><h3 id="cancel-code-title">اعتماد إلغاء الطلب</h3><p class="note">أدخل رمز اعتماد الأدمن قبل الإلغاء.</p><label for="cancel-code">رمز الإلغاء</label><input id="cancel-code" class="in" type="password" inputmode="numeric" autocomplete="off" minlength="4" maxlength="12"><label for="cancel-reason">سبب الإلغاء — اختياري</label><input id="cancel-reason" class="in" maxlength="500"><p id="cancel-code-error" role="alert"></p><button id="cancel-code-confirm" class="btn">اعتماد الإلغاء</button><button id="cancel-code-dismiss" class="btn ghost">رجوع</button></div></div>
+<div class="scrim" id="admin-cancel-pin-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="admin-cancel-pin-title"><h3 id="admin-cancel-pin-title">رمز اعتماد الإلغاء</h3><p class="note">رمز للمحل من 4 إلى 12 رقمًا. يستخدمه الكاشير لاعتماد الإلغاء، ولا يغيّر كلمة مرور حسابك.</p><p id="admin-cancel-pin-message" role="status"></p><label for="admin-cancel-pin">الرمز الجديد</label><input id="admin-cancel-pin" class="in" type="password" inputmode="numeric" autocomplete="new-password" maxlength="12"><label for="admin-cancel-pin-again">تأكيد الرمز</label><input id="admin-cancel-pin-again" class="in" type="password" inputmode="numeric" autocomplete="new-password" maxlength="12"><button id="admin-cancel-pin-save" class="btn">حفظ الرمز</button><button id="admin-cancel-pin-dismiss" class="btn ghost">رجوع</button></div></div>
+<script src="cancel-security.js?v=1"></script>
 <script src="native-print.js"></script>
-<script src="till.js?v=5"></script>
-<script src="app.js?v=10"></script>
+<script src="till.js?v=6"></script>
+<script src="print-settings.js?v=1"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>
