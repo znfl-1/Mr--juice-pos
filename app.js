@@ -261,6 +261,10 @@ if (x.state === 'refunded') info = '<small class="neg-v">مرتجع ' + dateFmt(
 var acts = '';
 if (x.state === 'active') acts = '<button class="btn sm" data-pay="' + esc(x.id) + '">تحصيل</button>' + delBtn('ocancel', x.id, 'إلغاء');
 else if (x.state === 'completed' && S.role === 'admin') acts = delBtn('orefund', x.id, 'مرتجع');
+if (window.JuicePrint && JuicePrint.available && (x.state === 'active' || x.state === 'completed')) {
+acts += '<button class="btn sm" data-print="' + esc(x.id) + '" data-role="kitchen">طباعة المطبخ</button>';
+if (x.state === 'completed') acts += '<button class="btn sm" data-print="' + esc(x.id) + '" data-role="cashier">طباعة الإيصال</button>';
+}
 return '<div class="row ord"><div class="t"><b>طلب #' + (nums[x.id] || x.number) + '</b> <span class="pill st-' + x.state + '">' + STATE_AR[x.state] + '</span>' + itemsHtml(x) + '<small class="num">' + small + '</small>' + cust + info + '</div><div class="a num">' + money(Number(x.total)) + '</div><div class="acts">' + acts + '</div></div>';
 }
 function renderOrders() {
@@ -485,6 +489,20 @@ bd.hidden = !na; bd.textContent = na;
 }
 document.addEventListener('click', async function (e) {
 var t = e.target.closest('button'); if (!t) return;
+if (t.dataset.print) {
+var order = S.orders.find(function (x) { return x.id === t.dataset.print; });
+if (!order || t.disabled) return;
+if (!confirm('طباعة نسخة على ' + (t.dataset.role === 'cashier' ? 'طابعة الكاشير' : 'طابعة المطبخ') + '؟')) return;
+t.disabled = true;
+try {
+var pr = await sb.from('printers').select('ip,port,enabled').eq('role', t.dataset.role).single();
+if (pr.error) throw pr.error;
+await JuicePrint.send(order, t.dataset.role, todayNums()[order.id] || order.number, pr.data);
+toast('تم إرسال البيانات للطابعة؛ راجع خروج الورقة');
+} catch (err) { toast('تعذر تأكيد الطباعة. راجع الطابعة قبل إعادة المحاولة.'); }
+finally { t.disabled = false; }
+return;
+}
 if (t.id === 'logout') { await sb.auth.signOut(); return; }
 if (t.id === 'import-menu') { t.disabled = true; try { await importMenu(); toast('تم استيراد المنيو'); } catch (err) { toast('تعذر الاستيراد'); t.disabled = false; } return; }
 if (t.id === 'nav-pos') { S.cat = null; S.q = ''; $('#q').value = ''; return setView('pos'); }

@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#3a2fd1">
 <meta name="color-scheme" content="only light">
 <title>Mr Juice POS</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="vendor/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@600&display=swap">
@@ -181,6 +181,12 @@ body:not(.is-admin) #nav-admin { display: none; }
 .form .btn, .form.p .btn { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: no-preference) { .tile, .btn { transition: transform .08s, background .15s; } }
+@media (max-width: 480px) {
+body { padding-inline: 8px; padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+.nav { padding-inline: 4px; gap: 2px; }
+.nav button { font-size: .75rem; min-width: 0; }
+.row { gap: 6px; }
+}
 </style>
 </head>
 <body>
@@ -266,6 +272,7 @@ body:not(.is-admin) #nav-admin { display: none; }
 </div>
 </div>
 <div class="toast" id="toast" hidden role="status"></div>
+<script src="native-print.js"></script>
 <script src="app.js?v=5"></script>
 </body>
 </html>
