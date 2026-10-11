@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="5.20">
+<meta name="app-version" content="5.21">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -212,7 +212,7 @@ html,body{touch-action:manipulation}
 </style>
 <link rel="icon" type="image/png" href="/icon-192-v518.png" sizes="192x192">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v518.png">
-<link rel="manifest" href="/manifest.webmanifest?v=520">
+<link rel="manifest" href="/manifest.webmanifest?v=521">
 </head>
 <body>
 <div class="login" id="login">
@@ -240,7 +240,7 @@ html,body{touch-action:manipulation}
 <div class="tiles" id="tiles"></div>
 </section>
 <aside class="receipt" id="cart-panel" aria-label="الطلب">
-<h2>الطلب الحالي <small id="cart-count"></small></h2>
+<h2>الطلب الحالي <small id="cart-count"></small></h2><div id="pending-order" class="card" role="status" hidden></div>
 <div class="seg" id="otype">
 <button data-t="dine" aria-pressed="true">صالة</button>
 <button data-t="take" aria-pressed="false">تيك أواي</button>
@@ -315,10 +315,10 @@ html,body{touch-action:manipulation}
 <div class="toast" id="toast" hidden role="status"></div>
 <div class="scrim" id="cancel-code-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cancel-code-title"><h3 id="cancel-code-title">اعتماد إلغاء الطلب</h3><p class="note">أدخل رمز اعتماد الأدمن قبل الإلغاء.</p><label for="cancel-code">رمز الإلغاء</label><input id="cancel-code" class="in" type="password" inputmode="numeric" autocomplete="off" minlength="4" maxlength="12"><label for="cancel-reason">سبب الإلغاء — اختياري</label><input id="cancel-reason" class="in" maxlength="500"><p id="cancel-code-error" role="alert"></p><button id="cancel-code-confirm" class="btn">اعتماد الإلغاء</button><button id="cancel-code-dismiss" class="btn ghost">رجوع</button></div></div>
 <div class="scrim" id="admin-cancel-pin-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="admin-cancel-pin-title"><h3 id="admin-cancel-pin-title">رمز اعتماد الإلغاء</h3><p class="note">رمز للمحل من 4 إلى 12 رقمًا. يستخدمه الكاشير لاعتماد الإلغاء، ولا يغيّر كلمة مرور حسابك.</p><p id="admin-cancel-pin-message" role="status"></p><label for="admin-cancel-pin">الرمز الجديد</label><input id="admin-cancel-pin" class="in" type="password" inputmode="numeric" autocomplete="new-password" maxlength="12"><label for="admin-cancel-pin-again">تأكيد الرمز</label><input id="admin-cancel-pin-again" class="in" type="password" inputmode="numeric" autocomplete="new-password" maxlength="12"><button id="admin-cancel-pin-save" class="btn">حفظ الرمز</button><button id="admin-cancel-pin-dismiss" class="btn ghost">رجوع</button></div></div>
-<script src="cancel-security.js?v=520"></script>
+<script src="cancel-security.js?v=521"></script>
 <script src="native-print.js"></script>
-<script src="till.js?v=520"></script>
-<script src="print-settings.js?v=520"></script>
-<script src="app.js?v=520"></script>
+<script src="till.js?v=521"></script>
+<script src="print-settings.js?v=521"></script>
+<script src="app.js?v=521"></script>
 </body>
 </html>

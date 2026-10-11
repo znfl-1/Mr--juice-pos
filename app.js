@@ -13,13 +13,18 @@ var COLS = ['products', 'sales', 'expenses'];
 var NOTE_CHIPS = ['بدون سكر', 'سكر خفيف', 'سكر زيادة', 'سكر على جنب', 'بدون ثلج', 'ثلج زيادة', 'بدون لبن', 'بدون نعناع', 'بدون كريمة', 'بدون مكسرات'];
 var STATE_AR = { active: 'نشط', completed: 'مكتمل', refunded: 'مرتجع', cancelled: 'ملغي' };
 var STAR = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6v36M8.4 15l31.2 18M8.4 33l31.2-18"/></svg>';
-var S = { view: 'pos', cat: null, q: '', method: 'cash', otype: 'dine', paid: '', range: 'today', dateFrom: '', dateTo: '', discount: 0, deliveryFee: 0, categories: [], productCat: '', productQ: '', armed: '', busy: false, loading: true, role: 'cashier', staff: [], customers: [], cust: null, newCust: false, custQ: '', cuQ: '', orders: [], ofilter: 'active', orderQ: '', selectedOrderId: null, payBusy: false, refundId: null, refundBusy: false, payId: null, payM: 'cash', payPaid: '', note: null, products: [], sales: [], expenses: [], cart: {} };
+var S = { view: 'pos', cat: null, q: '', method: 'cash', otype: 'dine', paid: '', range: 'today', dateFrom: '', dateTo: '', discount: 0, deliveryFee: 0, categories: [], productCat: '', productQ: '', armed: '', busy: false, pendingOrder: null, loading: true, role: 'cashier', staff: [], customers: [], cust: null, newCust: false, custQ: '', cuQ: '', orders: [], ofilter: 'active', orderQ: '', selectedOrderId: null, payBusy: false, refundId: null, refundBusy: false, payId: null, payM: 'cash', payPaid: '', note: null, products: [], sales: [], expenses: [], cart: {} };
 var db = null, mode = 'local', LS = 'pos_sys_v2_';
 var SB_URL = 'https://njrejjufurycusjhzfdv.supabase.co';
 var SB_KEY = 'sb_publishable_QTk_CJO1kCz53R32-JNgBg_2vTq-Lvu';
 var sb = window.supabase.createClient(SB_URL, SB_KEY);
 mode = 'db';
 function setStatus(t) { $('#status').textContent = t; }
+function pendingOrderKey(){return LS+'pending_order_'+myEmail;}
+function restorePendingOrder(){S.pendingOrder=null;try{var value=localStorage.getItem(pendingOrderKey());if(value){var saved=JSON.parse(value);if(saved.id&&saved.payload&&saved.snapshot){S.pendingOrder=saved;Object.assign(S,saved.snapshot);$('#paid').value=S.paid;$('#delivery-fee').value=S.deliveryFee||'';}else toast('بيانات طلب معلّق غير صالحة؛ راجع الأدمن قبل إنشاء طلب جديد');}}catch(e){toast('تعذر قراءة الطلب المعلّق من الجهاز');}}
+function paidValue(text){var value=String(text==null?'':text).trim().replace(/[٠-٩]/g,function(c){return String(c.charCodeAt(0)-1632);}).replace(/[۰-۹]/g,function(c){return String(c.charCodeAt(0)-1776);}).replace(/٫/g,'.');if(!value)return null;if(!/^\d+(?:\.\d{1,2})?$/.test(value))throw new Error('INVALID_PAID_AMOUNT');var n=Number(value);if(!Number.isFinite(n)||n>1000000000)throw new Error('INVALID_PAID_AMOUNT');return Math.round(n*100)/100;}
+function paidPreview(text){try{var value=paidValue(text);return value===null?NaN:value;}catch(e){return NaN;}}
+function basketLocked(){return S.busy||!!S.pendingOrder;}
 function mapProduct(r) { return { id: r.id, name: r.name, cat: r.category || 'أخرى', price: r.price == null ? null : Number(r.price), sizes: r.sizes || null, active: r.active !== false }; }
 function mapOrder(r) { var c = Date.parse(r.created_at), pd = r.paid_at ? Date.parse(r.paid_at) : c; return { id: r.id, cts: c, ts: pd, items: (r.items || []).filter(function(i){return !i.__pos_adjustment;}), adjustments: (r.items || []).filter(function(i){return i.__pos_adjustment;}), total: Number(r.total), method: r.method, type: r.order_type, paid: r.paid, cancelledAt:r.cancelled_at||null,createdByName:r.created_by_name||'موظف',paidByName:r.paid_by_name||'',cancelledBy:r.cancelled_by_name||'موظف',cancelReason:r.cancel_reason||'',number: r.day_number || r.number, businessDayId:r.business_day_id || null, customer: r.customer || null, state: r.state || 'completed', refundedAt: r.refunded_at ? Date.parse(r.refunded_at) : 0, refundedBy: r.refunded_by_name || 'موظف', reason: r.refund_reason || '' }; }
 function mapCustomer(r) { return { id: r.id, ts: Date.parse(r.created_at), name: r.name, phone: r.phone, address: r.address || '' }; }
@@ -65,7 +70,8 @@ await reload();
 async function orderUpdate(id, patch) {
 if(patch.state==='cancelled'){var approval=await sb.rpc('cancel_order',{p_order:id,p_pin:null,p_reason:''});if(approval.error||!approval.data.ok)throw approval.error||new Error(approval.data.error);await reload();return;}
 if(patch.state==='refunded'&&window.Till&&!Till.requireOpen())throw new Error('OPEN_TILL_REQUIRED');
-var r = await sb.from('orders').update(patch).eq('id', id).select('id');
+var query=sb.from('orders').update(patch).eq('id',id);if(patch.state==='completed')query=query.eq('state','active');
+var r = await query.select('id');
 if (r.error) throw r.error;
 if(!r.data||!r.data.length)throw new Error('ORDER_CHANGED_OR_NOT_AUTHORIZED');
 await reload();
@@ -98,7 +104,7 @@ await sb.from('staff').insert({ email: email, role: 'admin' });
 r = await sb.from('staff').select('email,role,display_name').eq('email', email);
 }
 if (r.error || !r.data.length) { await sb.auth.signOut(); showLogin('الحساب ده غير مصرح له بالدخول. اطلب من المسؤول إضافته.'); return; }
-S.role = r.data[0].role === 'admin' ? 'admin' : 'cashier';
+S.role = r.data[0].role === 'admin' ? 'admin' : 'cashier';restorePendingOrder();
 document.body.classList.add('authed');
 document.body.classList.toggle('is-admin', S.role === 'admin');
 if(S.role==='admin')setView('admin');else if(['admin','products','printing'].includes(S.view))setView('pos');
@@ -239,14 +245,16 @@ $('#delivery-value').textContent=money(amounts.delivery);
 $('#total').textContent = money(total);
 $('#nav-total').textContent = money(total);
 var cb = $('#nav-cart'); cb.classList.toggle('on', S.view === 'pos' && count > 0);
-$('#checkout').disabled = !items.length || S.busy;
-$('#clear').disabled = !items.length;
-$('#kitchen').disabled = !items.length || S.busy;
+$('#checkout').disabled = !items.length || basketLocked();
+$('#clear').disabled = !items.length || basketLocked();
+$('#kitchen').disabled = !items.length || basketLocked();
+var pending=$('#pending-order');if(pending){pending.hidden=!S.pendingOrder;pending.innerHTML=S.pendingOrder?'<p>نتيجة حفظ الطلب غير مؤكدة. إجمالي الطلب: '+money(S.pendingOrder.payload.total)+'. أكّد النتيجة قبل إنشاء طلب جديد.</p><button class="btn" id="pending-order-retry" '+(S.busy?'disabled':'')+'>التحقق وإكمال نفس الطلب</button>':'';}
+document.querySelectorAll('#cart-panel input,#cart-panel select,#cart-panel button[data-inc],#cart-panel button[data-dec],#cart-panel button[data-note],#discount-open,#discount-remove,#delivery-remove,#method button,#otype button').forEach(function(el){el.disabled=basketLocked();});
 document.querySelectorAll('#method button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.m === S.method)); });
 document.querySelectorAll('#otype button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.t === S.otype)); });
 $('#paid-row').hidden = S.method !== 'cash';
 $('#cust').hidden = S.otype !== 'delivery';
-var paid = parseFloat(S.paid), ch = $('#change');
+var paid = paidPreview(S.paid), ch = $('#change');
 if (S.method === 'cash' && !isNaN(paid) && items.length) {
 ch.hidden = false;
 if (paid >= total) { ch.style.color = 'var(--good)'; $('#change-v').textContent = money(paid - total); $('#change-l').textContent = 'الباقي للعميل'; }
@@ -261,29 +269,27 @@ return '<button data-size="' + z + '" data-pid="' + esc(p.id) + '">' + SIZE[z] +
 }).join('');
 $('#scrim').hidden = false;
 }
-async function checkout(state) {
-if(S.role==='admin')return toast('إنشاء الطلبات من حساب الكاشير');
-state = state || 'completed';
-var items = cartItems(); if (!items.length || S.busy) return;
-if(window.Till&&!Till.requireOpen())return;
-var cu = S.otype === 'delivery' ? S.customers.find(function (x) { return x.id === S.cust; }) : null;
-if (S.otype === 'delivery' && !cu) return toast('اختر العميل أو أضف عميل جديد للدليفري');
-if(S.otype==='delivery' && !$('#delivery-fee').checkValidity())return toast('اكتب رسوم دليفري صحيحة');
-var total = cartTotal(), paid = parseFloat(S.paid);
+async function submitPendingOrder(){
+if(!S.pendingOrder||S.busy)return;var request=S.pendingOrder;S.busy=true;renderCart();
+try{var r=await sb.rpc('submit_pos_order',{p_request:request.id,p_payload:request.payload});if(r.error)throw r.error;if(!r.data||!r.data.saved||r.data.id!==request.id)throw new Error('ORDER_UNCONFIRMED');
+localStorage.removeItem(request.storageKey||pendingOrderKey());S.pendingOrder=null;S.cart={};clearAdjustments();S.paid='';$('#paid').value='';S.cat=null;S.q='';$('#q').value='';S.cust=null;S.newCust=false;S.custQ='';await reload();toast(r.data.state==='active'?'تم تأكيد إرسال الطلب للمطبخ':'تم تأكيد حفظ الطلب #'+r.data.number);
+}catch(e){toast(String(e.message||'').indexOf('OPEN_TILL_REQUIRED')>=0?'افتح عهدة ثم أكمل نفس الطلب المعلّق':'لم نتأكد من الحفظ؛ أعد التحقق من نفس الطلب بعد رجوع الاتصال');}
+finally{S.busy=false;renderAll();renderCust(true);}
+}
+async function checkout(state){
+if(S.role==='admin')return toast('إنشاء الطلبات من حساب الكاشير');if(!S.pendingOrder){try{if(localStorage.getItem(pendingOrderKey()))restorePendingOrder();}catch(e){return toast('تعذر قراءة مرجع الطلب من تخزين الجهاز');}}if(S.pendingOrder)return submitPendingOrder();
+state=state||'completed';var items=cartItems();if(!items.length||S.busy)return;if(window.Till&&!Till.requireOpen())return;
+var cu=S.otype==='delivery'?S.customers.find(function(x){return x.id===S.cust;}):null;
+if(S.otype==='delivery'&&!cu)return toast('اختر العميل أو أضف عميل جديد للدليفري');if(S.otype==='delivery'&&!$('#delivery-fee').checkValidity())return toast('اكتب رسوم دليفري صحيحة');
+var total=cartTotal(),paid;try{paid=state==='completed'&&S.method==='cash'?paidValue(S.paid):null;}catch(e){return toast('اكتب المبلغ المدفوع بالأرقام فقط، وبحد أقصى منزلتين عشريتين');}
 if(!Number.isFinite(total)||total<0)return toast('راجع أسعار المنتجات والإجمالي');
-var rec = { ts: Date.now(), items: items.map(function (i) { return { b: i.b, n: i.n, z: i.z, q: i.q, p: i.price, note: i.note || '' }; }).concat(adjustmentItems()), total: total, method: state === 'active' ? 'cash' : S.method, type: S.otype, state: state, customer: cu ? { id: cu.id, name: cu.name, phone: cu.phone, address: cu.address } : null };
-if (state === 'completed') {
-if (S.method === 'cash' && !isNaN(paid) && paid < total) return toast('المبلغ المدفوع أقل من الإجمالي');
-if (S.method === 'cash' && !isNaN(paid) && paid >= total) rec.paid = paid;
+if(state==='completed'&&S.method==='cash'&&paid!==null&&paid<total)return toast('المبلغ المدفوع أقل من الإجمالي');
+var payload={items:items.map(function(i){return {b:i.b,n:i.n,z:i.z,q:i.q,p:i.price,note:i.note||''};}).concat(adjustmentItems()),total:total,method:state==='active'?'cash':S.method,paid:state==='completed'&&S.method==='cash'?paid:null,order_type:S.otype,state:state,customer:cu?{id:cu.id,name:cu.name,phone:cu.phone,address:cu.address}:null};
+var request={id:crypto.randomUUID(),storageKey:pendingOrderKey(),payload:payload,snapshot:{cart:Object.assign({},S.cart),discount:S.discount,deliveryFee:S.deliveryFee,method:S.method,otype:S.otype,paid:S.paid,cust:S.cust}};
+try{localStorage.setItem(pendingOrderKey(),JSON.stringify(request));}catch(e){return toast('تعذر حفظ مرجع الطلب على الجهاز؛ تأكد من توفر مساحة التخزين قبل البيع');}
+S.pendingOrder=request;return submitPendingOrder();
 }
-S.busy = true; renderCart();
-try {
-await addDoc('sales', rec);
-S.cart = {}; clearAdjustments(); S.paid = ''; $('#paid').value = ''; S.cat = null; S.q = ''; $('#q').value = ''; S.cust = null; S.newCust = false; S.custQ = '';
-toast(state === 'active' ? 'تم إرسال الطلب للمطبخ' : 'تم تأكيد الطلب ' + money(total));
-} catch (e) { toast('تعذر حفظ الطلب، حاول مرة أخرى'); }
-S.busy = false; renderAll(); renderCust(true);
-}
+
 function delBtn(col, id, label) {
 var k = col + ':' + id, on = S.armed === k;
 return '<button class="del' + (on ? ' armed' : '') + '" data-del="' + k + '">' + (on ? 'تأكيد؟' : label) + '</button>';
@@ -320,6 +326,7 @@ S.orders.forEach(function (x) {
 if(x.state==='cancelled'&&S.role!=='admin')return;
 if (x.state === 'active') by.active.push(x);
 else if(x.state==='cancelled'&&S.role==='admin')by.cancelled.push(x);
+else if(x.state==='completed'&&S.role==='admin')by.completed.push(x);
 else if (x.state === 'refunded') { if (S.role === 'admin' || x.cts >= st) by.refunded.push(x); }
 else if (by[x.state] && (x.businessDayId ? x.businessDayId===S.businessDayId : x.cts >= st || x.ts >= st)) by[x.state].push(x);
 });
@@ -330,7 +337,7 @@ by.cancelled.sort(function (a, b) { return b.cts - a.cts; });
 var f = S.ofilter, query=S.orderQ.toLowerCase(), list=(by[f]||[]).filter(function(x){return !query || [String(nums[x.id]||x.number),x.customer&&x.customer.name,x.customer&&x.customer.phone,x.createdByName,(x.items||[]).map(function(i){return i.n;}).join(' ')].join(' ').toLowerCase().indexOf(query)>=0;}),tot=sum(list,function(x){return x.total;});
 var selected=list.find(function(x){return x.id===S.selectedOrderId;})||list[0];S.selectedOrderId=selected?selected.id:null;
 var tabs=[['active','نشطة'],['completed','مغلقة'],['refunded','مرتجعة']];if(S.role==='admin')tabs.push(['cancelled','ملغية']);
-$('#view-orders').innerHTML='<div class="ticket-workspace"><section class="ticket-list"><div class="bar"><h2>الطلبات</h2><span class="note num">'+list.length+' طلب · '+money(tot)+'</span></div><label class="ticket-search">بحث في الطلبات<input class="in" id="order-search" value="'+esc(S.orderQ)+'" placeholder="رقم التذكرة، الصنف أو اسم العميل" autocomplete="off"></label><div class="chips">'+tabs.map(function(t){return '<button class="chip" data-of="'+t[0]+'" aria-pressed="'+(f===t[0])+'">'+t[1]+' <span class="num">'+by[t[0]].length+'</span></button>';}).join('')+'</div><div class="ticket-rows">'+(list.length?list.map(function(x){return '<button class="ticket-row" data-select-order="'+esc(x.id)+'" aria-pressed="'+(selected.id===x.id)+'"><span><span class="ticket-number num">#'+esc(nums[x.id]||x.number)+'</span><small>'+esc(x.createdByName||'موظف')+'</small></span><span>'+esc(TYPE[x.type]||'صالة')+'<small class="num">'+timeFmt(x.cts)+(x.state==='active'?' · '+minsSince(x.cts):'')+'</small></span><span><span class="pill st-'+x.state+'">'+STATE_AR[x.state]+'</span><small class="num">'+money(x.total)+'</small></span></button>';}).join(''):'<div class="empty">'+(query?'لا توجد نتائج مطابقة':'لا توجد طلبات في هذا القسم')+'</div>')+'</div></section><aside class="ticket-detail"><div class="ticket-detail-title">تفاصيل التذكرة</div>'+(selected?orderRow(selected,nums):'<div class="empty">اختر طلباً لعرض تفاصيله</div>')+'</aside></div>';
+$('#view-orders').innerHTML='<div class="ticket-workspace"><section class="ticket-list"><div class="bar"><h2>الطلبات</h2><span class="note num">'+list.length+' طلب · '+money(tot)+'</span></div><label class="ticket-search">بحث في الطلبات<input class="in" id="order-search" value="'+esc(S.orderQ)+'" placeholder="رقم التذكرة، الصنف أو اسم العميل" autocomplete="off"></label><div class="chips">'+tabs.map(function(t){return '<button class="chip" data-of="'+t[0]+'" aria-pressed="'+(f===t[0])+'">'+t[1]+' <span class="num">'+by[t[0]].length+'</span></button>';}).join('')+'</div><div class="ticket-rows">'+(list.length?list.map(function(x){return '<button class="ticket-row" data-select-order="'+esc(x.id)+'" aria-pressed="'+(selected.id===x.id)+'"><span><span class="ticket-number num">#'+esc(nums[x.id]||x.number)+'</span><small>'+esc(x.createdByName||'موظف')+'</small></span><span>'+esc(TYPE[x.type]||'صالة')+'<small class="num">'+(S.role==='admin'?dateFmt(x.cts)+' · ':'')+timeFmt(x.cts)+(x.state==='active'?' · '+minsSince(x.cts):'')+'</small></span><span><span class="pill st-'+x.state+'">'+STATE_AR[x.state]+'</span><small class="num">'+money(x.total)+'</small></span></button>';}).join(''):'<div class="empty">'+(query?'لا توجد نتائج مطابقة':'لا توجد طلبات في هذا القسم')+'</div>')+'</div></section><aside class="ticket-detail"><div class="ticket-detail-title">تفاصيل التذكرة</div>'+(selected?orderRow(selected,nums):'<div class="empty">اختر طلباً لعرض تفاصيله</div>')+'</aside></div>';
 
 }
 function niceMax(m) {
@@ -339,24 +346,28 @@ var mag = Math.pow(10, Math.floor(Math.log10(m))), st = [1, 2, 2.5, 4, 5, 8, 10]
 for (var i = 0; i < st.length; i++) if (st[i] * mag >= m) return st[i] * mag;
 return 10 * mag;
 }
+function reportPayments(){return S.orders.filter(function(x){return x.state==='completed'||x.state==='refunded';});}
 function chartSvg() {
-var days=[],bounds=rangeBounds(), first=bounds.start || Math.min.apply(null,S.sales.map(function(x){return x.ts;}).concat(S.expenses.map(function(x){return x.ts;}),[Date.now()])), firstKey=dateKey(first), lastKey=dateKey(bounds.end-1), count=Math.round((Date.parse(lastKey)-Date.parse(firstKey))/86400000)+1, groups=Math.min(7,count);
-for(var i=0;i<groups;i++){var k=shiftDate(firstKey,Math.floor(i*count/groups)), next=shiftDate(firstKey,Math.floor((i+1)*count/groups));days.push({s:dayBoundary(k),e:dayBoundary(next),sales:0,exp:0});}
-S.sales.forEach(function (x) { days.forEach(function (d) { if (x.ts >= d.s && x.ts < d.e) d.sales += Number(x.total) || 0; }); });
+var payments=reportPayments();
+var days=[],bounds=rangeBounds(), first=bounds.start || Math.min.apply(null,payments.map(function(x){return x.ts;}).concat(S.expenses.map(function(x){return x.ts;}),[Date.now()])), firstKey=dateKey(first), lastKey=dateKey(bounds.end-1), count=Math.round((Date.parse(lastKey)-Date.parse(firstKey))/86400000)+1, groups=Math.min(7,count);
+for(var i=0;i<groups;i++){var k=shiftDate(firstKey,Math.floor(i*count/groups)), next=shiftDate(firstKey,Math.floor((i+1)*count/groups));days.push({s:dayBoundary(k),e:dayBoundary(next),sales:0,exp:0,returns:0});}
+payments.forEach(function (x) { days.forEach(function (d) { if (x.ts >= d.s && x.ts < d.e) d.sales += Number(x.total) || 0; }); });
+S.orders.filter(function(x){return x.state==='refunded';}).forEach(function(x){days.forEach(function(d){if(x.refundedAt>=d.s&&x.refundedAt<d.e)d.returns+=Number(x.total)||0;});});
 S.expenses.forEach(function (x) { days.forEach(function (d) { if (x.ts >= d.s && x.ts < d.e) d.exp += Number(x.amount) || 0; }); });
-var max = niceMax(Math.max.apply(null, days.map(function (d) { return Math.max(d.sales, d.exp); }).concat([0])));
-var W = 640, H = 240, pl = 52, pr = 8, pt = 12, pb = 30, iw = W - pl - pr, ih = H - pt - pb, gw = iw / days.length, bw = gw * 0.28;
-var out = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="المبيعات والمصروفات خلال الفترة المحددة" font-family="inherit">';
+var max = niceMax(Math.max.apply(null, days.map(function (d) { return Math.max(d.sales,d.exp,d.returns); }).concat([0])));
+var W = 640, H = 240, pl = 52, pr = 8, pt = 12, pb = 30, iw = W - pl - pr, ih = H - pt - pb, gw = iw / days.length, bw = gw * 0.22;
+var out = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="المبيعات والمرتجعات والمصروفات خلال الفترة المحددة" font-family="inherit">';
 for (var t = 0; t <= 4; t++) {
 var v = max / 4 * t, y = pt + ih - (v / max) * ih;
 out += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y + '" y2="' + y + '" stroke="var(--line)" stroke-width="1"' + (t === 0 ? '' : ' stroke-dasharray="3 4"') + '/>';
 out += '<text x="' + (pl - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="var(--muted)">' + fmt(v) + '</text>';
 }
 days.forEach(function (d, idx) {
-var cx = pl + gw * idx + gw / 2, hs = (d.sales / max) * ih, he = (d.exp / max) * ih;
+var cx = pl + gw * idx + gw / 2, hs = (d.sales / max) * ih, he = (d.exp / max) * ih, hr=(d.returns/max)*ih;
 var label = new Date(d.s).toLocaleDateString('ar-EG-u-nu-latn',{timeZone:'Africa/Cairo',day:'numeric',month:'short'});
-out += '<rect x="' + (cx - bw - 2) + '" y="' + (pt + ih - hs) + '" width="' + bw + '" height="' + Math.max(hs, 0) + '" rx="3" fill="var(--accent)"><title>مبيعات: ' + money(d.sales) + '</title></rect>';
-out += '<rect x="' + (cx + 2) + '" y="' + (pt + ih - he) + '" width="' + bw + '" height="' + Math.max(he, 0) + '" rx="3" fill="var(--bad)"><title>مصروفات: ' + money(d.exp) + '</title></rect>';
+out += '<rect x="' + (cx - 1.5*bw - 3) + '" y="' + (pt + ih - hs) + '" width="' + bw + '" height="' + Math.max(hs, 0) + '" rx="3" fill="var(--accent)"><title>مبيعات: ' + money(d.sales) + '</title></rect>';
+out += '<rect x="' + (cx + 0.5*bw + 3) + '" y="' + (pt + ih - he) + '" width="' + bw + '" height="' + Math.max(he, 0) + '" rx="3" fill="var(--bad)"><title>مصروفات: ' + money(d.exp) + '</title></rect>';
+out += '<rect x="'+(cx-bw/2)+'" y="'+(pt+ih-hr)+'" width="'+bw+'" height="'+Math.max(hr,0)+'" rx="3" fill="#c58c21"><title>مرتجعات: '+money(d.returns)+'</title></rect>';
 out += '<text x="' + cx + '" y="' + (H - 9) + '" text-anchor="middle" font-size="12" fill="var(--muted)"' + (idx === 6 ? ' font-weight="600"' : '') + '>' + label + '</text>';
 });
 return out + '</svg>';
@@ -393,7 +404,7 @@ btn.disabled=true;try{var query=editingProduct?sb.from('products').update(doc).e
 
 function renderAdmin() {
 var st = rangeStart();
-var sales = S.sales.filter(function (x) { return inRange(x.ts); }), exps = S.expenses.filter(function (x) { return inRange(x.ts); });
+var sales = reportPayments().filter(function (x) { return inRange(x.ts); }), exps = S.expenses.filter(function (x) { return inRange(x.ts); });
 var tS = sum(sales, function (x) { return x.total; }), tE = sum(exps, function (x) { return x.amount; }), net = tS - tE;
 var cash = sum(sales.filter(function (x) { return x.method !== 'card'; }), function (x) { return x.total; }), card = tS - cash;
 var avg = sales.length ? tS / sales.length : 0;
@@ -408,11 +419,11 @@ var cats = catList();
 var refs = S.orders.filter(function (x) { return x.state === 'refunded'; }).sort(function (a, b) { return (b.refundedAt || b.cts) - (a.refundedAt || a.cts); });
 refs = refs.filter(function(x){return inRange(x.refundedAt || x.cts);});
 var refR = refs;
-var tR = sum(refR, function (x) { return x.total; });
+var tR = sum(refR, function (x) { return x.total; });net=tS-tR-tE;
 var months = {}, mkeys = [];
-refs.forEach(function (x) { var t = x.refundedAt || x.cts, d = new Date(t), k = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); if (!months[k]) { months[k] = { n: 0, t: 0, ts: t }; mkeys.push(k); } months[k].n++; months[k].t += x.total; });
+refs.forEach(function (x) { var t = x.refundedAt || x.cts, k = dateKey(t).slice(0,7); if (!months[k]) { months[k] = { n: 0, t: 0, ts: t }; mkeys.push(k); } months[k].n++; months[k].t += x.total; });
 var refCard = '<section class="card"><h3>المرتجعات الشهرية <small>' + refs.length + ' مرتجع</small></h3>' +
-(mkeys.length ? '<div class="rows">' + mkeys.map(function (k) { var m = months[k]; return '<div class="row"><div class="t"><b>' + new Date(m.ts).toLocaleDateString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' }) + '</b><small class="num">' + m.n + ' طلب مرتجع</small></div><div class="a num neg-v">' + money(m.t) + '</div></div>'; }).join('') + '</div>' +
+(mkeys.length ? '<div class="rows">' + mkeys.map(function (k) { var m = months[k]; return '<div class="row"><div class="t"><b>' + new Date(m.ts).toLocaleDateString('ar-EG-u-nu-latn', {timeZone:'Africa/Cairo', month:'long',year:'numeric'}) + '</b><small class="num">' + m.n + ' طلب مرتجع</small></div><div class="a num neg-v">' + money(m.t) + '</div></div>'; }).join('') + '</div>' +
 '<h3>آخر المرتجعات</h3><div class="rows scroll">' + refs.slice(0, 30).map(function (x) { var t = x.refundedAt || x.cts; return '<div class="row"><div class="t">' + itemsHtml(x) + '<small class="num">' + dateFmt(t) + ' · ' + timeFmt(t) + (x.refundedBy ? ' · ' + esc(x.refundedBy) : '') + '</small>' + (x.reason ? '<small>السبب: ' + esc(x.reason) + '</small>' : '') + '</div><div class="a num neg-v">' + money(x.total) + '</div><span></span></div>'; }).join('') + '</div>' : '<div class="empty">لا توجد مرتجعات</div>') + '</section>';
 $('#view-admin').innerHTML =
 '<div class="bar"><h2>ملخص ' + names[S.range] + '</h2><div class="chips">' +
@@ -421,12 +432,12 @@ $('#view-admin').innerHTML =
 '<div class="kpis">' +
 '<div class="kpi main"><span class="kl">إجمالي المبيعات</span><span class="kv num">' + money(tS) + '</span><span class="ks">' + sales.length + ' طلب · متوسط ' + money(avg) + '</span></div>' +
 '<div class="kpi"><span class="kl">إجمالي المصروفات</span><span class="kv num neg-v">' + money(tE) + '</span><span class="ks">' + exps.length + ' بند</span></div>' +
-'<div class="kpi"><span class="kl">المبيعات بعد المصروفات</span><span class="kv num ' + (net >= 0 ? 'pos-v' : 'neg-v') + '">' + (net < 0 ? '−' : '') + money(Math.abs(net)) + '</span><span class="ks">المبيعات − المصروفات</span></div>' +
+'<div class="kpi"><span class="kl">الصافي بعد المرتجعات والمصروفات</span><span class="kv num ' + (net >= 0 ? 'pos-v' : 'neg-v') + '">' + (net < 0 ? '−' : '') + money(Math.abs(net)) + '</span><span class="ks">المبيعات − المرتجعات − المصروفات</span></div>' +
 '<div class="kpi"><span class="kl">المرتجعات</span><span class="kv num neg-v">' + money(tR) + '</span><span class="ks">' + refR.length + ' طلب مرتجع</span></div>' +
-'<div class="kpi"><span class="kl">طرق الدفع</span><span class="kv num" style="font-size:1.25rem">كاش ' + fmt(cash) + '</span><span class="ks num">فيزا ' + fmt(card) + ' ج.م</span></div></div>' +
+'<div class="kpi"><span class="kl">طرق الدفع قبل المرتجعات</span><span class="kv num" style="font-size:1.25rem">كاش ' + fmt(cash) + '</span><span class="ks num">فيزا ' + fmt(card) + ' ج.م</span></div></div>' +
 '<div class="cols">' +
-'<section class="card"><h3>الفترة المحددة <small>المبيعات مقابل المصروفات</small></h3><div class="legend"><span><i style="background:var(--accent)"></i>مبيعات</span><span><i style="background:var(--bad)"></i>مصروفات</span></div><div class="chartbox">' + chartSvg() + '</div></section>' +
-'<section class="card top5"><h3>الأكثر مبيعًا <small>' + names[S.range] + '</small></h3><div class="rows">' +
+'<section class="card"><h3>الفترة المحددة <small>المبيعات والمرتجعات والمصروفات</small></h3><div class="legend"><span><i style="background:var(--accent)"></i>مبيعات قبل المرتجعات</span><span><i style="background:#c58c21"></i>مرتجعات</span><span><i style="background:var(--bad)"></i>مصروفات</span></div><div class="chartbox">' + chartSvg() + '</div></section>' +
+'<section class="card top5"><h3>الأكثر مبيعًا قبل المرتجعات <small>' + names[S.range] + '</small></h3><div class="rows">' +
 (top.length ? top.map(function (t) { return '<div class="row"><div class="t">' + esc(t.n) + '<small class="num">' + t.q + ' قطعة</small><div class="meter"><b style="width:' + Math.max(4, t.r / topMax * 100) + '%"></b></div></div><div class="a num">' + money(t.r) + '</div></div>'; }).join('') : '<div class="empty">لا مبيعات في هذه الفترة</div>') + '</div></section></div>' +
 refCard +
 '<section class="card"><h3>عهدات الكاشير</h3><p class="note">مراجعة مبيعات ومصروفات كل عهدة والكاش المتوقع والفعلي والعجز والزيادة.</p><button class="btn sm" id="admin-tills">عرض العهدات</button></section>' +
@@ -537,7 +548,7 @@ function updatePay() {
 var o = payOrder(); if (!o) return;
 document.querySelectorAll('#pay-method button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.pm === S.payM)); });
 $('#pay-paid-row').hidden = S.payM !== 'cash';
-var paid = parseFloat(S.payPaid), ch = $('#pay-change');
+var paid = paidPreview(S.payPaid), ch = $('#pay-change');
 if (S.payM === 'cash' && !isNaN(paid)) {
 ch.hidden = false;
 if (paid >= o.total) { ch.style.color = 'var(--good)'; $('#pay-change-v').textContent = money(paid - o.total); $('#pay-change-l').textContent = 'الباقي للعميل'; }
@@ -549,11 +560,11 @@ if(S.payBusy)return;
 if(S.role==='admin')return toast('التحصيل من حساب الكاشير');
 var o = payOrder(); if (!o||o.state!=='active')return toast('الطلب مغلق أو غير متاح');
 if(window.Till&&!Till.requireOpen())return;
-var paid = parseFloat(S.payPaid);
-if (S.payM === 'cash' && !isNaN(paid) && paid < o.total) return toast('المبلغ المدفوع أقل من الإجمالي');
+var paid;try{paid=S.payM==='cash'?paidValue(S.payPaid):null;}catch(e){return toast('اكتب المبلغ المدفوع بالأرقام فقط، وبحد أقصى منزلتين عشريتين');}
+if (S.payM === 'cash' && paid!==null && paid < o.total) return toast('المبلغ المدفوع أقل من الإجمالي');
 var btn = $('#pay-ok'); S.payBusy=true;btn.disabled = true;
 try {
-await orderUpdate(o.id, { state: 'completed', method: S.payM, paid: S.payM === 'cash' && !isNaN(paid) ? paid : null });
+await orderUpdate(o.id, { state: 'completed', method: S.payM, paid: S.payM === 'cash' && paid!==null ? paid : null });
 $('#payscrim').hidden = true; S.payId = null; toast('تم تحصيل الطلب ' + money(o.total));
 } catch (e) { toast('تعذر التحصيل، ربما الطلب اتغيّر. حدّث الصفحة'); }
 S.payBusy=false;btn.disabled = false;
@@ -585,6 +596,9 @@ bd.hidden = !na; bd.textContent = na;
 }
 document.addEventListener('click', async function (e) {
 var t = e.target.closest('button'); if (!t) return;
+if(t.id==='pending-order-retry')return submitPendingOrder();
+if(basketLocked()&&(t.dataset.p||t.dataset.size||t.dataset.inc||t.dataset.dec||t.dataset.note||t.dataset.m||t.dataset.t||t.dataset.cust||['clear','discount-open','discount-apply','discount-remove','delivery-remove','note-ok','c-clear','c-save'].includes(t.id)))return toast('أكّد نتيجة الطلب المعلّق أولاً');
+if(S.payBusy&&(t.dataset.pm||t.id==='pay-x'))return;
 if(t.dataset.discountPreset){$('#discount-input').value=t.dataset.discountPreset;return;}
 if (t.id === 'discount-open') {$('#discount-input').value=S.discount||'';$('#discountscrim').hidden=false;$('#discount-input').focus();return;}
 if (t.id === 'discount-close') {$('#discountscrim').hidden=true;$('#discount-open').focus();return;}
@@ -616,7 +630,7 @@ toast('تم إرسال البيانات للطابعة؛ راجع خروج ال�
 finally { t.disabled = false; }
 return;
 }
-if (t.id === 'logout') { await sb.auth.signOut(); return; }
+if (t.id === 'logout') { if(S.busy||S.payBusy||S.refundBusy)return toast('استنى تأكيد العملية قبل تسجيل الخروج');await sb.auth.signOut(); return; }
 if (t.id === 'import-menu') { t.disabled = true; try { await importMenu(); toast('تم استيراد المنيو'); } catch (err) { toast('تعذر الاستيراد'); t.disabled = false; } return; }
 if(t.dataset.staffName){if(S.role!=='admin')return;var member=S.staff.find(function(m){return m.email===t.dataset.staffName;});var chosen=prompt('اسم العرض للموظف',member?member.name:'');if(chosen===null)return;if(!chosen.trim()||chosen.trim().length>80)return toast('اكتب اسمًا من 1 إلى 80 حرفًا');var renamed=await sb.rpc('set_staff_display_name',{p_email:t.dataset.staffName,p_name:chosen.trim()});if(renamed.error)return toast('تعذر تغيير الاسم');await reload();return toast('تم تغيير اسم الموظف');}
 if (t.id === 'nav-pos') { S.cat = null; S.q = ''; $('#q').value = ''; return setView('pos'); }
@@ -729,24 +743,24 @@ setInterval(function () { if (S.view === 'orders' && !S.payId) renderOrders(); }
 $('#q').addEventListener('input', function (e) { S.q = e.target.value.trim(); renderPos(); });
 document.addEventListener('input', function (e) {
 if(e.target.id==='order-search'){var cursor=e.target.selectionStart;S.orderQ=e.target.value;renderOrders();var input=$('#order-search');input.focus();if(input.setSelectionRange)input.setSelectionRange(cursor,cursor);return;}
-if(e.target.id==='delivery-fee'){var fee=Number(e.target.value);S.deliveryFee=Number.isFinite(fee)&&fee>=0?Math.round(fee*100)/100:0;e.target.setCustomValidity(fee<0?'الرسوم لا يمكن تكون سالبة':'');renderCart();}
+if(e.target.id==='delivery-fee'){if(basketLocked()){e.target.value=S.deliveryFee||'';return;}var fee=Number(e.target.value);S.deliveryFee=Number.isFinite(fee)&&fee>=0?Math.round(fee*100)/100:0;e.target.setCustomValidity(fee<0?'الرسوم لا يمكن تكون سالبة':'');renderCart();}
 else if(e.target.id==='product-search'){S.productQ=e.target.value;renderProductRows();}
 else if (e.target.id === 'note-in') { if (S.note) { S.note.text = e.target.value; syncChips(); } }
 else if (e.target.id === 'pay-paid') { S.payPaid = e.target.value; updatePay(); }
 else if (e.target.id === 'c-q') { S.custQ = e.target.value; renderCustList(); }
 else if (e.target.id === 'cu-q') { S.cuQ = e.target.value; var el = e.target, pos = el.selectionStart; renderCustomers(); var n2 = document.getElementById('cu-q'); if (n2) { n2.focus(); try { n2.setSelectionRange(pos, pos); } catch (x) {} } }
 });
-$('#paid').addEventListener('input', function (e) { S.paid = e.target.value; renderCart(); });
+$('#paid').addEventListener('input', function (e) { if(basketLocked()){e.target.value=S.paid;return;}S.paid = e.target.value; renderCart(); });
 async function boot() {
 var v = 'pos';
 try { v = localStorage.getItem(LS + 'view') || 'pos'; } catch (e) {}
 setView(v === 'admin' || v === 'orders' || v === 'customers' || v === 'products' || v === 'till' || v === 'printing' ? v : 'pos');
-sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT') { S.products = []; S.sales = []; S.expenses = []; S.staff = []; S.customers = []; S.orders = []; S.cust = null; S.newCust = false; S.role = 'cashier'; S.refundId=null;$('#refundscrim').hidden=true;S.cart = {}; clearAdjustments(); S.discount=0; if(window.CancelSecurity)CancelSecurity.reset();if(window.PrintSettings)PrintSettings.reset();if(window.Till)Till.reset();myEmail='';showLogin(); } });
+sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT') { S.products = []; S.sales = []; S.expenses = []; S.staff = []; S.customers = []; S.orders = []; S.cust = null; S.newCust = false; S.role = 'cashier';S.pendingOrder=null;S.refundId=null;$('#refundscrim').hidden=true;S.cart = {}; clearAdjustments(); S.discount=0; if(window.CancelSecurity)CancelSecurity.reset();if(window.PrintSettings)PrintSettings.reset();if(window.Till)Till.reset();myEmail='';showLogin(); } });
 var r = await sb.auth.getSession();
 if (r.data.session) enter(r.data.session); else showLogin();
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){['discountscrim','productscrim'].forEach(function(id){$('#'+id).hidden=true;});}});
-if(window.Till)Till.init({client:sb,role:function(){return S.role;},email:function(){return myEmail;},onChange:reload,showMessage:toast,changeView:setView,amount:money,escape:esc});
+if(window.Till)Till.init({client:sb,role:function(){return S.role;},email:function(){return myEmail;},onChange:reload,hasPendingOrder:function(){return !!S.pendingOrder||S.busy;},showMessage:toast,changeView:setView,amount:money,escape:esc});
 if(window.PrintSettings)PrintSettings.init({client:sb,categories:function(){return S.categories;},role:function(){return S.role;},toast:toast});
 if(window.CancelSecurity)CancelSecurity.init({client:sb,role:function(){return S.role;},reload:reload,toast:toast});
 boot();
