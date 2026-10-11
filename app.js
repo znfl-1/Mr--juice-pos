@@ -4,8 +4,8 @@ var fmt = function (n) { return (Math.round(n * 100) / 100).toLocaleString('en-U
 var money = function (n) { return fmt(n) + ' ج.م'; };
 var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
 var uid = function () { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); };
-var timeFmt = function (ts) { return new Date(ts).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }); };
-var dateFmt = function (ts) { return new Date(ts).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'short' }); };
+var timeFmt = function (ts) { return new Date(ts).toLocaleTimeString('ar-EG-u-nu-latn', {timeZone:'Africa/Cairo', hour: 'numeric', minute: '2-digit' }); };
+var dateFmt = function (ts) { return new Date(ts).toLocaleDateString('ar-EG-u-nu-latn', {timeZone:'Africa/Cairo', day: 'numeric', month: 'short' }); };
 var SIZE = { M: 'M', L: 'L' };
 var TYPE = { dine: 'صالة', take: 'تيك أواي', delivery: 'دليفري' };
 var CAT_ORDER = ['العصائر الطازجة', 'سموزي', 'ميلك شيك', 'موهيتو', 'الزبادي اليوناني', 'جيلاتو', 'ساندي', 'العصائر العائلية', 'وافل', 'بان كيك', 'فروت سلاط', 'قهوة', 'أيس كوفي'];
@@ -65,8 +65,9 @@ await reload();
 async function orderUpdate(id, patch) {
 if(patch.state==='cancelled'){var approval=await sb.rpc('cancel_order',{p_order:id,p_pin:null,p_reason:''});if(approval.error||!approval.data.ok)throw approval.error||new Error(approval.data.error);await reload();return;}
 if(patch.state==='refunded'&&window.Till&&!Till.requireOpen())throw new Error('OPEN_TILL_REQUIRED');
-var r = await sb.from('orders').update(patch).eq('id', id);
+var r = await sb.from('orders').update(patch).eq('id', id).select('id');
 if (r.error) throw r.error;
+if(!r.data||!r.data.length)throw new Error('ORDER_CHANGED_OR_NOT_AUTHORIZED');
 await reload();
 }
 async function importMenu() {
@@ -292,7 +293,9 @@ function itemsHtml(x) {
 return (x.items || []).map(function (i) { return '<div class="oi">' + (i.q > 1 ? i.q + '× ' : '') + esc(i.n) + (i.note ? ' <span class="onote">— ' + esc(i.note) + '</span>' : '') + '</div>'; }).join('');
 }
 function orderRow(x, nums) {
-var small = 'بواسطة '+esc(x.createdByName)+(x.paidByName?' · التحصيل: '+esc(x.paidByName):'')+' · '+timeFmt(x.cts) + ' · ' + (TYPE[x.type] || 'صالة') + (x.state === 'completed' ? ' · ' + (x.method === 'card' ? 'فيزا' : 'كاش') : x.state === 'active' ? ' · ' + minsSince(x.cts) : '');
+var meta='<span>'+esc(TYPE[x.type]||'صالة')+'</span><span class="num">'+timeFmt(x.cts)+'</span>'+(x.state==='active'?'<span class="order-age">'+minsSince(x.cts)+'</span>':x.state==='completed'?'<span>'+(x.method==='card'?'فيزا':'كاش')+'</span>':'');
+var staff='<span>بواسطة <b>'+esc(x.createdByName||'موظف')+'</b></span>'+(x.paidByName?'<span>التحصيل: <b>'+esc(x.paidByName)+'</b></span>':'');
+var itemRows=(x.items||[]).map(function(i){var name=String(i.n||'').split(' · ').slice(-1)[0];return '<div class="order-item"><span class="order-qty num">'+esc(i.q||1)+'×</span><div><span>'+esc(name)+'</span>'+(i.note?'<p class="order-item-note">ملاحظة: '+esc(i.note)+'</p>':'')+'</div></div>';}).join('');
 var cust = x.customer ? '<small>' + esc(x.customer.name) + ' · <span class="num">' + esc(x.customer.phone) + '</span>' + (x.customer.address ? ' · ' + esc(x.customer.address) : '') + '</small>' : '';
 var info = '';
 if (x.state === 'refunded') info = '<small class="neg-v">مرتجع ' + dateFmt(x.refundedAt || x.cts) + ' ' + timeFmt(x.refundedAt || x.cts) + (x.refundedBy ? ' · ' + esc(x.refundedBy) : '') + (x.reason ? ' · ' + esc(x.reason) : '') + '</small>';
@@ -306,7 +309,8 @@ if (window.JuicePrint && JuicePrint.available && (x.state === 'active' || x.stat
 acts += '<button class="btn sm" data-print="' + esc(x.id) + '" data-role="kitchen">طباعة المطبخ</button>';
 if (x.state === 'completed') acts += '<button class="btn sm" data-print="' + esc(x.id) + '" data-role="cashier">طباعة الإيصال</button>';
 }
-return '<div class="row ord"><div class="t"><b>طلب #' + (nums[x.id] || x.number) + '</b> <span class="pill st-' + x.state + '">' + STATE_AR[x.state] + '</span>' + itemsHtml(x) + '<small class="num">' + small + '</small>' + cust + adjustmentSummary + info + '</div><div class="a num">' + money(Number(x.total)) + '</div><div class="acts">' + acts + '</div></div>';
+return '<article class="ord"><header class="order-head"><div class="order-id"><b>طلب <span class="num">#'+(nums[x.id]||x.number)+'</span></b><span class="pill st-'+x.state+'">'+STATE_AR[x.state]+'</span></div><strong class="order-amount num">'+money(Number(x.total))+'</strong></header><div class="order-meta">'+meta+'</div><div class="order-items">'+itemRows+'</div><div class="order-staff">'+staff+'</div>'+(cust?'<div class="order-customer">'+cust+'</div>':'')+((adjustmentSummary||info)?'<div class="order-extra">'+adjustmentSummary+info+'</div>':'')+(acts?'<footer class="acts">'+acts+'</footer>':'')+'</article>';
+
 }
 function renderOrders() {
 var st = startOfDay(0), nums = todayNums();
@@ -325,7 +329,7 @@ var tabs = [['active', 'نشطة'], ['completed', 'مكتملة'], ['refunded', 
 var empty = { active: 'لا توجد طلبات نشطة في المطبخ', completed: 'لا طلبات مكتملة اليوم بعد', refunded: 'لا مرتجعات', cancelled: 'لا طلبات ملغية اليوم' };
 $('#view-orders').innerHTML = '<div class="bar"><h2>الطلبات</h2><span class="note num">' + list.length + ' طلب · ' + money(tot) + '</span></div>' +
 '<div class="chips">' + tabs.map(function (t) { return '<button class="chip" data-of="' + t[0] + '" aria-pressed="' + (f === t[0]) + '">' + t[1] + ' <span class="num">' + by[t[0]].length + '</span></button>'; }).join('') + '</div>' +
-'<section class="card"><div class="rows">' + (list.length ? list.map(function (x) { return orderRow(x, nums); }).join('') : '<div class="empty">' + empty[f] + '</div>') + '</div></section>';
+'<section class="orders-list"><div class="rows">' + (list.length ? list.map(function (x) { return orderRow(x, nums); }).join('') : '<div class="empty">' + empty[f] + '</div>') + '</div></section>';
 }
 function niceMax(m) {
 if (m <= 0) return 4;
@@ -717,7 +721,7 @@ $('#paid').addEventListener('input', function (e) { S.paid = e.target.value; ren
 async function boot() {
 var v = 'pos';
 try { v = localStorage.getItem(LS + 'view') || 'pos'; } catch (e) {}
-setView(v === 'admin' || v === 'orders' || v === 'customers' || v === 'products' || v === 'till' ? v : 'pos');
+setView(v === 'admin' || v === 'orders' || v === 'customers' || v === 'products' || v === 'till' || v === 'printing' ? v : 'pos');
 sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT') { S.products = []; S.sales = []; S.expenses = []; S.staff = []; S.customers = []; S.orders = []; S.cust = null; S.newCust = false; S.role = 'cashier'; S.cart = {}; clearAdjustments(); S.discount=0; if(window.CancelSecurity)CancelSecurity.reset();if(window.PrintSettings)PrintSettings.reset();if(window.Till)Till.reset();myEmail='';showLogin(); } });
 var r = await sb.auth.getSession();
 if (r.data.session) enter(r.data.session); else showLogin();

@@ -1,0 +1,17 @@
+{
+  "shop_name": "Mr Juice",
+  "subtitle": "Mr.Juice - الرفاعي",
+  "invoice_title": "Simplified Tax Invoice",
+  "footer": "",
+  "delivery_phone": "0402232302",
+  "show_logo": true,
+  "show_printed_at": true,
+  "show_check_number": true,
+  "show_customer": true,
+  "show_product_count": true,
+  "font_size": 26,
+  "logo_width_percent": 75,
+  "order_font_size": 40,
+  "bottom_space": 24,
+  "logo_data": ""
+}

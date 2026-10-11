@@ -1,0 +1,17 @@
+{
+  "name": "MR CASHIER",
+  "short_name": "MR CASHIER",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f4f9",
+  "theme_color": "#6844ae",
+  "icons": [
+    {
+      "src": "/mr-cashier.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
