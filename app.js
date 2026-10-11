@@ -196,7 +196,8 @@ return renderCart();
 var list;
 if (S.q) {
 var nq = norm(S.q);
-list = S.products.filter(function (p) { return p.active && (norm(p.name).indexOf(nq) >= 0 || norm(p.cat || '').indexOf(nq) >= 0); });
+function searchRank(p){var name=norm(p.name);if(name.startsWith(nq))return 0;if(name.split(' ').some(function(word){return word.startsWith(nq);}))return 1;if(nq.length>1&&name.includes(nq))return 2;if(nq.length>1&&norm(p.cat||'').includes(nq))return 3;return 99;}
+list = S.products.filter(function(p){return p.active&&searchRank(p)<99;}).sort(function(a,b){return searchRank(a)-searchRank(b);});
 crumb.innerHTML = '<h2>نتائج البحث <small class="note">' + list.length + '</small></h2>';
 } else if (S.cat) {
 list = S.products.filter(function (p) { return p.active && (p.cat || 'أخرى') === S.cat; });
