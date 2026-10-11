@@ -8,10 +8,17 @@
   "theme_color": "#6844ae",
   "icons": [
     {
-      "src": "/mr-cashier.png",
-      "sizes": "any",
+      "src": "/icon-192-v518.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512-v518.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }
-  ]
+  ],
+  "id": "/"
 }

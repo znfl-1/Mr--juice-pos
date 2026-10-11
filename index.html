@@ -2,12 +2,12 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="5.14">
+<meta name="app-version" content="5.19">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Mr Juice">
+<meta name="apple-mobile-web-app-title" content="MR CASHIER">
 <meta name="theme-color" content="#3a2fd1">
 <meta name="color-scheme" content="only light">
 <title>Mr Juice POS</title>
@@ -205,11 +205,14 @@ html,body{touch-action:manipulation}
 .orders-list>.rows{gap:14px}.orders-list .ord{display:flex;flex-direction:column;gap:12px;background:var(--surface,#fff);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0;box-shadow:0 3px 14px #28203504}.order-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.order-id{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.order-id>b{font-size:1rem;font-weight:600}.order-id .pill{font-size:.72rem;padding:4px 9px}.order-amount{font-size:1.05rem;font-weight:600;white-space:nowrap;color:var(--accent)}.order-meta,.order-staff{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;color:var(--muted);font-size:.78rem;line-height:1.8}.order-meta>span{white-space:nowrap}.order-age{background:var(--surface2);padding:2px 8px;border-radius:6px}.order-items{border-block:1px solid var(--line);padding:12px 0;display:flex;flex-direction:column;gap:10px}.order-item{display:flex;gap:10px;align-items:baseline;font-size:.9rem;line-height:1.65}.order-item>div{min-width:0;overflow-wrap:anywhere}.order-qty{color:var(--muted);min-width:28px;flex-shrink:0;font-size:.8rem}.order-item-note{margin:5px 0 0;color:var(--accent);font-size:.78rem;line-height:1.7}.order-staff b{font-weight:500;color:var(--ink,#332d40)}.order-customer{padding:10px 12px;background:var(--surface2);border-radius:9px;font-size:.8rem;line-height:1.7}.order-customer small,.order-extra small{display:block}.order-extra{font-size:.78rem;line-height:1.8;color:var(--muted)}.orders-list .ord .acts{display:flex;flex-direction:row;gap:10px;flex-wrap:wrap;align-items:stretch;border-top:1px solid var(--line);padding-top:12px}.orders-list .ord .acts .btn{flex:1;min-width:130px;min-height:44px;font-size:.86rem}.orders-list .ord .acts .del{min-width:90px;min-height:44px;border:1px solid #eedadd;border-radius:10px;padding:8px 18px;color:var(--bad);font-size:.86rem}.orders-list .ord .acts .del.armed{background:#fde4dc}.orders-list .empty{padding:28px 16px;background:var(--surface,#fff);border:1px solid var(--line);border-radius:16px}
 @media(max-width:380px){.orders-list .ord{padding:13px}.order-amount{font-size:.96rem}#view-orders .chips .chip{font-size:.76rem;padding:8px}.order-meta,.order-staff{gap:5px 10px}}
 
+
+.ticket-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(285px,340px);gap:20px;align-items:start}.ticket-list,.ticket-detail{min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}.ticket-search{display:block;font-size:.8rem;color:var(--muted);margin:12px 0}.ticket-search input{margin-top:6px}.ticket-rows{display:flex;flex-direction:column}.ticket-row{width:100%;display:grid;grid-template-columns:1fr 1.3fr 1fr;align-items:center;gap:12px;text-align:start;padding:16px 12px;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;font:inherit;font-size:.9rem}.ticket-row[aria-pressed=true]{background:var(--surface2);box-shadow:inset -3px 0 var(--accent)}.ticket-row:hover{background:var(--surface2)}.ticket-row small{display:block;color:var(--muted);margin-top:6px;font-size:.76rem}.ticket-number{font-weight:600}.ticket-detail{position:sticky;top:16px}.ticket-detail-title{font-size:.8rem;color:var(--muted);margin-bottom:14px}.ticket-detail .ord,.ticket-payment-summary .ord{display:flex;flex-direction:column;gap:14px}.ticket-detail .order-items{min-height:100px}.ticket-detail .order-head{align-items:start}.ticket-detail .acts{display:flex;gap:8px;flex-wrap:wrap}.ticket-detail .acts .btn{flex:1;min-height:48px}.ticket-detail .acts .del{padding:10px}.ticket-payment{width:min(820px,100%);max-height:90dvh;overflow:auto}.ticket-payment-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}.ticket-payment-summary{padding:12px;background:var(--surface2);border-radius:10px}.ticket-payment-controls{display:flex;flex-direction:column;gap:14px}.ticket-payment-controls .total{background:var(--accent);color:#fff;padding:16px;border-radius:10px}.ticket-payment-controls #pay-ok{min-height:54px;margin-top:8px}.ticket-payment-summary .order-amount{display:none}
+@media(max-width:760px){.ticket-workspace,.ticket-payment-grid{grid-template-columns:1fr}.ticket-detail{position:static;grid-row:2}.ticket-row{gap:8px;padding:13px 7px;font-size:.8rem}.ticket-list,.ticket-detail{padding:14px}.ticket-payment-summary{max-height:220px;overflow:auto}}
+
 </style>
-<link rel="icon" type="image/png" href="mr-cashier.png">
-<link rel="apple-touch-icon" href="mr-cashier.png">
-<meta name="apple-mobile-web-app-title" content="MR CASHIER">
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icon-192-v518.png" sizes="192x192">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v518.png">
+<link rel="manifest" href="/manifest.webmanifest?v=519">
 </head>
 <body>
 <div class="login" id="login">
@@ -295,14 +298,14 @@ html,body{touch-action:manipulation}
 </div>
 </div>
 <div class="scrim" id="payscrim" hidden>
-<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pay-t">
-<h3 id="pay-t"></h3>
+<div class="sheet ticket-payment" role="dialog" aria-modal="true" aria-labelledby="pay-t">
+<h3 id="pay-t"></h3><div class="ticket-payment-grid"><div id="pay-order-summary" class="ticket-payment-summary"></div><div class="ticket-payment-controls">
 <div class="total"><span>الإجمالي</span><span class="num" id="pay-total"></span></div>
 <div class="seg" id="pay-method"><button data-pm="cash" aria-pressed="true">كاش</button><button data-pm="card" aria-pressed="false">فيزا</button></div>
 <div class="field" id="pay-paid-row"><label for="pay-paid">المبلغ المدفوع</label><input class="in num" id="pay-paid" inputmode="decimal" placeholder="0" autocomplete="off"></div>
 <div class="change" id="pay-change" hidden><span id="pay-change-l"></span><span class="num" id="pay-change-v"></span></div>
-<button class="btn" id="pay-ok">تأكيد الدفع</button>
-<button class="btn ghost" id="pay-x">إلغاء</button>
+<button class="btn" id="pay-ok">تأكيد الدفع وقفل التذكرة</button>
+<button class="btn ghost" id="pay-x">رجوع للطلب</button></div></div>
 </div>
 </div>
 <div class="scrim" id="discountscrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="discount-title"><h3 id="discount-title">خصم على الطلب</h3><p class="note">يُحسب على قيمة المنتجات قبل رسوم الدليفري.</p><label for="discount-input">نسبة الخصم %</label><input class="in num" id="discount-input" type="number" min="0" max="100" step="0.5" inputmode="decimal" placeholder="10"><div class="chips"><button class="chip" data-discount-preset="5">5%</button><button class="chip" data-discount-preset="10">10%</button><button class="chip" data-discount-preset="15">15%</button><button class="chip" data-discount-preset="20">20%</button></div><button class="btn" id="discount-apply">تطبيق الخصم</button><button class="btn ghost" id="discount-close">إلغاء</button></div></div>
@@ -311,10 +314,10 @@ html,body{touch-action:manipulation}
 <div class="toast" id="toast" hidden role="status"></div>
 <div class="scrim" id="cancel-code-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cancel-code-title"><h3 id="cancel-code-title">اعتماد إلغاء الطلب</h3><p class="note">أدخل رمز اعتماد الأدمن قبل الإلغاء.</p><label for="cancel-code">رمز الإلغاء</label><input id="cancel-code" class="in" type="password" inputmode="numeric" autocomplete="off" minlength="4" maxlength="12"><label for="cancel-reason">سبب الإلغاء — اختياري</label><input id="cancel-reason" class="in" maxlength="500"><p id="cancel-code-error" role="alert"></p><button id="cancel-code-confirm" class="btn">اعتماد الإلغاء</button><button id="cancel-code-dismiss" class="btn ghost">رجوع</button></div></div>
 <div class="scrim" id="admin-cancel-pin-dialog" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="admin-cancel-pin-title"><h3 id="admin-cancel-pin-title">رمز اعتماد الإلغاء</h3><p class="note">رمز للمحل من 4 إلى 12 رقمًا. يستخدمه الكاشير لاعتماد الإلغاء، ولا يغيّر كلمة مرور حسابك.</p><p id="admin-cancel-pin-message" role="status"></p><label for="admin-cancel-pin">الرمز الجديد</label><input id="admin-cancel-pin" class="in" type="password" inputmode="numeric" autocomplete="new-password" maxlength="12"><label for="admin-cancel-pin-again">تأكيد الرمز</label><input id="admin-cancel-pin-again" class="in" type="password" inputmode="numeric" autocomplete="new-password" maxlength="12"><button id="admin-cancel-pin-save" class="btn">حفظ الرمز</button><button id="admin-cancel-pin-dismiss" class="btn ghost">رجوع</button></div></div>
-<script src="cancel-security.js?v=514"></script>
+<script src="cancel-security.js?v=519"></script>
 <script src="native-print.js"></script>
-<script src="till.js?v=514"></script>
-<script src="print-settings.js?v=514"></script>
-<script src="app.js?v=514"></script>
+<script src="till.js?v=519"></script>
+<script src="print-settings.js?v=519"></script>
+<script src="app.js?v=519"></script>
 </body>
 </html>

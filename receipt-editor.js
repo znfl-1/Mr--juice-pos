@@ -1,6 +1,6 @@
 (function () {
 'use strict';
-var defaults = {shop_name:'Mr Juice',subtitle:'Mr.Juice - الرفاعي',invoice_title:'Simplified Tax Invoice',footer:'',delivery_phone:'0402232302',show_logo:true,show_printed_at:true,show_check_number:true,show_customer:true,show_product_count:true,font_size:26,logo_width_percent:75,order_font_size:40,bottom_space:24,logo_data:''};
+var defaults = {shop_name:'Mr Juice',subtitle:'Mr.Juice - الرفاعي',invoice_title:'Simplified Tax Invoice',footer:'',delivery_phone:'0402232302',show_logo:true,show_printed_at:true,show_check_number:true,show_customer:true,show_product_count:true,font_size:26,logo_width_percent:75,order_font_size:40,bottom_space:12,logo_data:''};
 var cfg = Object.assign({}, defaults), defaultLogo = '', form = document.getElementById('settings'), preview = document.getElementById('preview'), message = document.getElementById('message');
 var ranges = {font_size:[18,36],logo_width_percent:[30,90],order_font_size:[28,54],bottom_space:[0,80]};
 function normalize(raw) {
