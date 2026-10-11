@@ -56,6 +56,7 @@ async function receipt(order, role, number) {
   });
   if (role === 'cashier') {
     add('────────────────────────');
+    if((order.adjustments||[]).length){add('مجموع المنتجات: '+order.items.reduce(function(t,i){return t+i.q*i.p;},0).toFixed(2)+' ج.م');(order.adjustments||[]).forEach(function(a){add(a.n+': '+(a.kind==='discount'?'− ':'')+Number(a.amount).toFixed(2)+' ج.م');});}
     add('الإجمالي: ' + order.total.toFixed(2) + ' ج.م');
     add(order.method === 'card' ? 'الدفع: كارت' : 'الدفع: كاش');
     if (order.method !== 'card' && order.paid != null) {
