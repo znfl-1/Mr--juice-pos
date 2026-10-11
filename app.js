@@ -13,7 +13,7 @@ var COLS = ['products', 'sales', 'expenses'];
 var NOTE_CHIPS = ['بدون سكر', 'سكر خفيف', 'سكر زيادة', 'سكر على جنب', 'بدون ثلج', 'ثلج زيادة', 'بدون لبن', 'بدون نعناع', 'بدون كريمة', 'بدون مكسرات'];
 var STATE_AR = { active: 'نشط', completed: 'مكتمل', refunded: 'مرتجع', cancelled: 'ملغي' };
 var STAR = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6v36M8.4 15l31.2 18M8.4 33l31.2-18"/></svg>';
-var S = { view: 'pos', cat: null, q: '', method: 'cash', otype: 'dine', paid: '', range: 'today', dateFrom: '', dateTo: '', discount: 0, deliveryFee: 0, categories: [], productCat: '', productQ: '', armed: '', busy: false, loading: true, role: 'cashier', staff: [], customers: [], cust: null, newCust: false, custQ: '', cuQ: '', orders: [], ofilter: 'active', orderQ: '', selectedOrderId: null, payBusy: false, payId: null, payM: 'cash', payPaid: '', note: null, products: [], sales: [], expenses: [], cart: {} };
+var S = { view: 'pos', cat: null, q: '', method: 'cash', otype: 'dine', paid: '', range: 'today', dateFrom: '', dateTo: '', discount: 0, deliveryFee: 0, categories: [], productCat: '', productQ: '', armed: '', busy: false, loading: true, role: 'cashier', staff: [], customers: [], cust: null, newCust: false, custQ: '', cuQ: '', orders: [], ofilter: 'active', orderQ: '', selectedOrderId: null, payBusy: false, refundId: null, refundBusy: false, payId: null, payM: 'cash', payPaid: '', note: null, products: [], sales: [], expenses: [], cart: {} };
 var db = null, mode = 'local', LS = 'pos_sys_v2_';
 var SB_URL = 'https://njrejjufurycusjhzfdv.supabase.co';
 var SB_KEY = 'sb_publishable_QTk_CJO1kCz53R32-JNgBg_2vTq-Lvu';
@@ -299,7 +299,7 @@ var itemRows=(x.items||[]).map(function(i){var name=String(i.n||'').split(' · '
 var cust = x.customer ? '<small>' + esc(x.customer.name) + ' · <span class="num">' + esc(x.customer.phone) + '</span>' + (x.customer.address ? ' · ' + esc(x.customer.address) : '') + '</small>' : '';
 var info = '';
 if (x.state === 'refunded') info = '<small class="neg-v">مرتجع ' + dateFmt(x.refundedAt || x.cts) + ' ' + timeFmt(x.refundedAt || x.cts) + (x.refundedBy ? ' · ' + esc(x.refundedBy) : '') + (x.reason ? ' · ' + esc(x.reason) : '') + '</small>';
-if(x.state==='cancelled'&&S.role==='admin')info+='<small>ألغاه: '+esc(x.cancelledBy)+(x.cancelReason?' · السبب: '+esc(x.cancelReason):'')+'</small>';
+if(x.state==='cancelled'&&S.role==='admin')info+='<small>ألغاه: '+esc(x.cancelledBy)+(x.cancelledAt?' · '+dateFmt(Date.parse(x.cancelledAt))+' '+timeFmt(Date.parse(x.cancelledAt)):'')+(x.cancelReason?' · السبب: '+esc(x.cancelReason):'')+'</small>';
 var adjustmentSummary=(x.adjustments||[]).map(function(a){return '<small>'+esc(a.n)+': '+money(a.amount)+'</small>';}).join('');
 var acts = '';
 if (x.state === 'active' && S.role==='admin') acts=delBtn('ocancel',x.id,'إلغاء');
@@ -313,10 +313,13 @@ return '<article class="ord"><header class="order-head"><div class="order-id"><b
 
 }
 function renderOrders() {
+if(S.role!=='admin'&&S.ofilter==='cancelled')S.ofilter='active';
 var st = startOfDay(0), nums = todayNums();
 var by = { active: [], completed: [], refunded: [], cancelled: [] };
 S.orders.forEach(function (x) {
+if(x.state==='cancelled'&&S.role!=='admin')return;
 if (x.state === 'active') by.active.push(x);
+else if(x.state==='cancelled'&&S.role==='admin')by.cancelled.push(x);
 else if (x.state === 'refunded') { if (S.role === 'admin' || x.cts >= st) by.refunded.push(x); }
 else if (by[x.state] && (x.businessDayId ? x.businessDayId===S.businessDayId : x.cts >= st || x.ts >= st)) by[x.state].push(x);
 });
@@ -326,7 +329,7 @@ by.refunded.sort(function (a, b) { return (b.refundedAt || b.cts) - (a.refundedA
 by.cancelled.sort(function (a, b) { return b.cts - a.cts; });
 var f = S.ofilter, query=S.orderQ.toLowerCase(), list=(by[f]||[]).filter(function(x){return !query || [String(nums[x.id]||x.number),x.customer&&x.customer.name,x.customer&&x.customer.phone,x.createdByName,(x.items||[]).map(function(i){return i.n;}).join(' ')].join(' ').toLowerCase().indexOf(query)>=0;}),tot=sum(list,function(x){return x.total;});
 var selected=list.find(function(x){return x.id===S.selectedOrderId;})||list[0];S.selectedOrderId=selected?selected.id:null;
-var tabs=[['active','نشطة'],['completed','مغلقة'],['refunded','مرتجعة'],['cancelled','ملغية']];
+var tabs=[['active','نشطة'],['completed','مغلقة'],['refunded','مرتجعة']];if(S.role==='admin')tabs.push(['cancelled','ملغية']);
 $('#view-orders').innerHTML='<div class="ticket-workspace"><section class="ticket-list"><div class="bar"><h2>الطلبات</h2><span class="note num">'+list.length+' طلب · '+money(tot)+'</span></div><label class="ticket-search">بحث في الطلبات<input class="in" id="order-search" value="'+esc(S.orderQ)+'" placeholder="رقم التذكرة، الصنف أو اسم العميل" autocomplete="off"></label><div class="chips">'+tabs.map(function(t){return '<button class="chip" data-of="'+t[0]+'" aria-pressed="'+(f===t[0])+'">'+t[1]+' <span class="num">'+by[t[0]].length+'</span></button>';}).join('')+'</div><div class="ticket-rows">'+(list.length?list.map(function(x){return '<button class="ticket-row" data-select-order="'+esc(x.id)+'" aria-pressed="'+(selected.id===x.id)+'"><span><span class="ticket-number num">#'+esc(nums[x.id]||x.number)+'</span><small>'+esc(x.createdByName||'موظف')+'</small></span><span>'+esc(TYPE[x.type]||'صالة')+'<small class="num">'+timeFmt(x.cts)+(x.state==='active'?' · '+minsSince(x.cts):'')+'</small></span><span><span class="pill st-'+x.state+'">'+STATE_AR[x.state]+'</span><small class="num">'+money(x.total)+'</small></span></button>';}).join(''):'<div class="empty">'+(query?'لا توجد نتائج مطابقة':'لا توجد طلبات في هذا القسم')+'</div>')+'</div></section><aside class="ticket-detail"><div class="ticket-detail-title">تفاصيل التذكرة</div>'+(selected?orderRow(selected,nums):'<div class="empty">اختر طلباً لعرض تفاصيله</div>')+'</aside></div>';
 
 }
@@ -509,6 +512,14 @@ var nk = pr[0] + '|' + (pr[1] || '') + (text ? '|' + text : '');
 if (nk !== old && S.cart[old]) { var q = S.cart[old]; delete S.cart[old]; S.cart[nk] = (S.cart[nk] || 0) + q; }
 S.note = null; $('#notescrim').hidden = true; renderPos();
 }
+async function openRefund(id){
+if(S.role!=='admin'||S.refundBusy)return;var o=S.orders.find(function(x){return x.id===id;});if(!o||o.state!=='completed')return toast('الطلب غير مكتمل أو تم إرجاعه');
+S.refundBusy=true;try{var r=await sb.from('till_sessions').select('id,drawer,cashier_name').eq('state','open').order('opened_at');if(r.error)throw r.error;if(!r.data||!r.data.length)return toast('افتح عهدة كاشير أولاً لتسجيل قيمة المرتجع عليها');S.refundId=id;$('#refund-title').textContent='مرتجع طلب #'+(todayNums()[id]||o.number);$('#refund-amount').textContent=money(o.total);$('#refund-reason').value='';$('#refund-till').innerHTML=r.data.map(function(t){return '<option value="'+esc(t.id)+'">'+esc(t.drawer)+' — '+esc(t.cashier_name||'كاشير')+'</option>';}).join('');$('#refundscrim').hidden=false;}catch(e){toast('تعذر تحميل العهد المفتوحة');}finally{S.refundBusy=false;}
+}
+async function confirmRefund(){
+if(S.role!=='admin'||S.refundBusy||!S.refundId)return;var id=S.refundId,session=$('#refund-till').value;if(!session)return toast('اختر عهدة لتسجيل المرتجع');S.refundBusy=true;$('#refund-confirm').disabled=true;
+try{var r=await sb.rpc('admin_refund_order',{p_order_id:id,p_reason:$('#refund-reason').value.trim(),p_session_id:session});if(r.error)throw r.error;if(!r.data||!r.data.refunded)throw new Error('REFUND_FAILED');$('#refundscrim').hidden=true;S.refundId=null;await reload();toast('تم تسجيل المرتجع على العهدة المحددة');}catch(e){toast(String(e.message||'').indexOf('OPEN_TILL_REQUIRED')>=0?'العهدة اتقفلت؛ اختر عهدة مفتوحة':String(e.message||'').indexOf('ORDER_NOT_COMPLETED')>=0?'الطلب اتغير أو تم إرجاعه بالفعل':'تعذر تسجيل المرتجع، حاول مرة أخرى');}finally{S.refundBusy=false;$('#refund-confirm').disabled=false;}
+}
 function payOrder() { return S.orders.find(function (x) { return x.id === S.payId; }); }
 function openPay(id) {
 if(S.payBusy)return;
@@ -631,6 +642,9 @@ if (t.id === 'clear') { S.cart = {}; clearAdjustments(); S.paid = ''; $('#paid')
 if (t.id === 'checkout') return checkout();
 if (t.dataset.range) { S.range = t.dataset.range; return renderAdmin(); }
 if(t.dataset.del&&t.dataset.del.startsWith('ocancel:')&&S.role!=='admin'){return CancelSecurity.open(t.dataset.del.slice(8));}
+if(t.id==='refund-confirm')return confirmRefund();
+if(t.id==='refund-close'){if(!S.refundBusy){S.refundId=null;$('#refundscrim').hidden=true;}return;}
+if(t.dataset.del&&t.dataset.del.startsWith('orefund:'))return openRefund(t.dataset.del.slice(8));
 if (t.dataset.del) {
 if (S.armed === t.dataset.del) {
 var pr = t.dataset.del.split(':'); S.armed = '';
@@ -727,7 +741,7 @@ async function boot() {
 var v = 'pos';
 try { v = localStorage.getItem(LS + 'view') || 'pos'; } catch (e) {}
 setView(v === 'admin' || v === 'orders' || v === 'customers' || v === 'products' || v === 'till' || v === 'printing' ? v : 'pos');
-sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT') { S.products = []; S.sales = []; S.expenses = []; S.staff = []; S.customers = []; S.orders = []; S.cust = null; S.newCust = false; S.role = 'cashier'; S.cart = {}; clearAdjustments(); S.discount=0; if(window.CancelSecurity)CancelSecurity.reset();if(window.PrintSettings)PrintSettings.reset();if(window.Till)Till.reset();myEmail='';showLogin(); } });
+sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_OUT') { S.products = []; S.sales = []; S.expenses = []; S.staff = []; S.customers = []; S.orders = []; S.cust = null; S.newCust = false; S.role = 'cashier'; S.refundId=null;$('#refundscrim').hidden=true;S.cart = {}; clearAdjustments(); S.discount=0; if(window.CancelSecurity)CancelSecurity.reset();if(window.PrintSettings)PrintSettings.reset();if(window.Till)Till.reset();myEmail='';showLogin(); } });
 var r = await sb.auth.getSession();
 if (r.data.session) enter(r.data.session); else showLogin();
 }
