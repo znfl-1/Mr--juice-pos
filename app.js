@@ -17,7 +17,80 @@ var S = { view: 'pos', cat: null, q: '', method: 'cash', otype: 'dine', paid: ''
 var db = null, mode = 'local', LS = 'pos_sys_v2_';
 var SB_URL = 'https://njrejjufurycusjhzfdv.supabase.co';
 var SB_KEY = 'sb_publishable_QTk_CJO1kCz53R32-JNgBg_2vTq-Lvu';
-var sb = window.supabase.createClient(SB_URL, SB_KEY);
+const ipadPrint = (() => {
+ const key='mr-cashier-ipad-print-v1';
+ let config=JSON.parse(localStorage.getItem(key)||'{}'), busy=false, running=false;
+ const save=()=>localStorage.setItem(key,JSON.stringify(config));
+ function transport(url,options={}) {
+  const path=new URL(typeof url==='string'?url:url.url||String(url),location.href);
+  if(config.device && path.origin===new URL(SB_URL).origin && options.method && ['POST','PATCH'].includes(options.method.toUpperCase()) && ['/rest/v1/rpc/submit_pos_order','/rest/v1/orders'].includes(path.pathname)){
+   const headers=new Headers(options.headers);headers.set('x-pos-ipad',config.device);
+   if(config.kitchen)headers.set('x-pos-kitchen','yes');
+   if(path.pathname.endsWith('/submit_pos_order'))headers.set('x-pos-submit','yes');
+   options={...options,headers};
+  }
+  return fetch(url,options);
+ }
+ const notify=msg=>{const el=document.getElementById('ipad-status');if(el)el.textContent=msg;toast(msg);};
+ async function send(ip,body){
+  if(!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip))throw Error('عنوان الطابعة غير صالح');
+  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),15000);
+  try{
+   const r=await fetch('https://'+ip+'/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000',{method:'POST',credentials:'omit',signal:ctl.signal,headers:{'Content-Type':'text/xml; charset=utf-8','SOAPAction':'""'},body:'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">'+body+'<feed line="3"/><cut type="feed"/></epos-print></s:Body></s:Envelope>'});
+   const node=new DOMParser().parseFromString(await r.text(),'application/xml').getElementsByTagNameNS('*','response')[0];
+   if(!r.ok||node?.getAttribute('success')!=='true')throw Error(node?.getAttribute('code')||'تعذّر تأكيد الطباعة');
+  }finally{clearTimeout(timer);}
+ }
+ function raster(lines){
+  const canvas=document.createElement('canvas');canvas.width=576;canvas.height=40;
+  const ctx=canvas.getContext('2d');let rows=[];
+  for(const [text,bold] of lines){
+   ctx.font=(bold?'bold ':'')+'26px Arial';let row='';
+   for(const ch of String(text)){if(row&&ctx.measureText(row+ch).width>548){rows.push([row,bold]);row='';}row+=ch;}rows.push([row,bold]);
+  }
+  let xml='';
+  for(let start=0;start<rows.length;start+=16){
+   const block=rows.slice(start,start+16);canvas.height=40*block.length;ctx.fillStyle='white';ctx.fillRect(0,0,576,canvas.height);ctx.fillStyle='black';ctx.direction='rtl';ctx.textAlign='right';
+   block.forEach(([line,bold],i)=>{ctx.font=(bold?'bold ':'')+'26px Arial';ctx.fillText(line,562,30+i*40);});
+   const pixels=ctx.getImageData(0,0,576,canvas.height).data;let binary='';
+   for(let i=0;i<pixels.length;i+=32){let byte=0;for(let bit=0;bit<8;bit++)if(pixels[i+bit*4]<155)byte|=128>>bit;binary+=String.fromCharCode(byte);}
+   xml+='<image width="576" height="'+canvas.height+'" color="color_1" mode="mono">'+btoa(binary)+'</image>';
+  }
+  return xml;
+ }
+ function documentBody(job){
+  const o=job.order,s=job.settings,k=job.kind,receipt=k==='receipt';
+  const enabled={receipt:s.cashier_receipt,pickup:s.cashier_pickup,kitchen:s.kitchen_ticket};
+  if(!enabled[k])return '';
+  const items=o.items.filter(i=>!i.__pos_adjustment&&(receipt||s.category_routes?.[i.category||String(i.b||'').split(' · ').slice(0,-1).join(' · ')]?.[k]!==false));
+  if(!receipt&&!items.length)return '';
+  const lines=[['Mr Juice'],['طلب #'+(o.day_number||o.number),true],[{receipt:'إيصال العميل',pickup:'تجهيز',kitchen:'المطبخ'}[k]+' · '+(TYPE[o.order_type]||'')],[dateFmt(Date.parse(o.created_at))+' · '+timeFmt(Date.parse(o.created_at))]];
+  if(o.customer)lines.push([o.customer.name||''],[o.customer.phone||''],[o.customer.address||'']);
+  for(const i of items){lines.push([i.q+' × '+(i.n||i.b)+(receipt?'   '+money(i.q*i.p):'')]);if(i.note&&s[{receipt:'receipt_notes',pickup:'pickup_notes',kitchen:'kitchen_notes'}[k]])lines.push(['ملاحظة: '+i.note]);}
+  if(receipt){for(const a of o.items.filter(i=>i.__pos_adjustment))lines.push([a.n+' '+money(a.amount)]);lines.push(['الإجمالي '+money(o.total)],[o.method==='card'?'فيزا':'كاش']);if(o.paid!=null)lines.push(['المدفوع '+money(o.paid)],['الباقي '+money(o.paid-o.total)]);}
+  return raster(lines);
+ }
+ async function drain(){
+  if(busy||!config.device||!myEmail||S.role!=='cashier'||document.hidden)return;
+  busy=true;
+  try{for(let count=0;count<10;count++){
+   const d=config.device,next=await sb.rpc('ipad_next',{d});if(next.error)throw next.error;const job=next.data;if(!job)break;
+   let ok=true,msg='';try{const body=documentBody(job);if(body)await send(job.ip,body);}catch(e){ok=false;msg=e.message;notify('راجع ورقة الطلب #'+(job.order.day_number||job.order.number)+' — '+msg);}
+   const ack=await sb.rpc('ipad_finish',{d,j:job.id,ok,msg});if(ack.error)throw ack.error;
+  }}catch(e){notify('تعذّر تأكيد حالة طباعة الآيباد');}finally{busy=false;}
+ }
+ function mount(){
+  let panel=document.getElementById('ipad-panel');
+  if(!panel){panel=document.createElement('details');panel.id='ipad-panel';panel.className='card';document.getElementById('cart-panel').append(panel);}
+  function draw(){panel.innerHTML='<summary>الطباعة من هذا الجهاز</summary><p id="ipad-status" role="status"></p><button type="button" class="btn" id="ipad-toggle"></button> <button type="button" class="chip" id="ipad-kitchen"></button>';
+   const toggle=panel.querySelector('#ipad-toggle'),k=panel.querySelector('#ipad-kitchen');toggle.textContent=config.device?'العودة لوسيط الطباعة':'تفعيل طابعة الكاشير على هذا الآيباد';k.hidden=!config.device;k.textContent=config.kitchen?'إرجاع المطبخ للوسيط':'اختبار المطبخ وتفعيله';
+   toggle.onclick=()=>{if(busy)return;if(config.device){if(!confirm('تحويل الطلبات الجديدة للوسيط؟'))return;config={};}else config={device:crypto.randomUUID(),kitchen:false};save();draw();drain();};
+   k.onclick=async()=>{if(config.kitchen){config.kitchen=false;save();draw();return;}k.disabled=true;try{const r=await sb.from('printers').select('ip').eq('role','kitchen').eq('enabled',true).single();if(r.error)throw r.error;await send(r.data.ip,'<text>MR CASHIER - KITCHEN TEST&#10;</text>');if(confirm('هل خرجت ورقة الاختبار من طابعة المطبخ؟'))config.kitchen=true;save();draw();}catch(e){notify('اختبار المطبخ: '+e.message);}finally{k.disabled=false;}};
+  }draw();if(!running){running=true;setInterval(drain,4000);}drain();
+ }
+ return {transport,mount};
+})();
+var sb = window.supabase.createClient(SB_URL, SB_KEY,{global:{fetch:ipadPrint.transport}});
 mode = 'db';
 function setStatus(t) { $('#status').textContent = t; }
 function pendingOrderKey(){return LS+'pending_order_'+myEmail;}
@@ -104,7 +177,7 @@ await sb.from('staff').insert({ email: email, role: 'admin' });
 r = await sb.from('staff').select('email,role,display_name').eq('email', email);
 }
 if (r.error || !r.data.length) { await sb.auth.signOut(); showLogin('الحساب ده غير مصرح له بالدخول. اطلب من المسؤول إضافته.'); return; }
-S.role = r.data[0].role === 'admin' ? 'admin' : 'cashier';restorePendingOrder();
+S.role = r.data[0].role === 'admin' ? 'admin' : 'cashier';restorePendingOrder();if(S.role==='cashier')ipadPrint.mount();
 document.body.classList.add('authed');
 document.body.classList.toggle('is-admin', S.role === 'admin');
 if(S.role==='admin')setView('admin');else if(['admin','products','printing'].includes(S.view))setView('pos');
