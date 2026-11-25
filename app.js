@@ -90,6 +90,7 @@ const ipadPrint = (() => {
  }
  return {transport,mount};
 })();
+var recoveryReturn = new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
 var sb = window.supabase.createClient(SB_URL, SB_KEY,{global:{fetch:ipadPrint.transport}});
 mode = 'db';
 function setStatus(t) { $('#status').textContent = t; }
@@ -836,7 +837,38 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){['discounts
 if(window.Till)Till.init({client:sb,role:function(){return S.role;},email:function(){return myEmail;},onChange:reload,hasPendingOrder:function(){return !!S.pendingOrder||S.busy;},showMessage:toast,changeView:setView,amount:money,escape:esc});
 if(window.PrintSettings)PrintSettings.init({client:sb,categories:function(){return S.categories;},role:function(){return S.role;},toast:toast});
 if(window.CancelSecurity)CancelSecurity.init({client:sb,role:function(){return S.role;},reload:reload,toast:toast});
-boot();
+async function recoveryScreen(){
+ document.body.classList.remove('authed');
+ const form=document.getElementById('login-form');
+ form.innerHTML='<h1>تغيير كلمة المرور</h1><input class="in" type="password" autocomplete="new-password" minlength="6" required placeholder="كلمة المرور الجديدة"><input class="in" type="password" autocomplete="new-password" required placeholder="تأكيد كلمة المرور"><button class="btn" disabled>حفظ كلمة المرور</button><p role="status"></p>';
+ const msg=form.querySelector('p'),button=form.querySelector('button');
+ form.addEventListener('submit',async function(event){
+  event.preventDefault();event.stopImmediatePropagation();
+  if(button.disabled)return;
+  const fields=form.querySelectorAll('input');
+  if(fields[0].value!==fields[1].value){msg.textContent='كلمتا المرور مختلفتان';return;}
+  button.disabled=true;
+  try{const result=await sb.auth.updateUser({password:fields[0].value});if(result.error)throw result.error;
+   await sb.auth.signOut({scope:'local'});location.replace('/');
+  }catch(err){msg.textContent='تعذّر الحفظ. راجع قوة كلمة المرور أو اطلب رابطاً جديداً.';button.disabled=false;}
+ },true);
+ const session=await sb.auth.getSession();
+ if(session.error||!session.data.session){msg.textContent='انتهت صلاحية الرابط. اطلب رابطاً جديداً من شاشة الدخول.';return;}
+ button.disabled=false;
+}
+if(recoveryReturn){recoveryScreen();}else{
+ const forgot=document.createElement('button');
+ forgot.type='button';forgot.className='linkbtn';forgot.textContent='نسيت كلمة المرور؟';
+ document.getElementById('login-toggle').after(forgot);
+ forgot.onclick=async function(){
+ const input=document.getElementById('l-email'),message=document.getElementById('login-msg');
+ if(!input.value.trim()||!input.checkValidity()){message.textContent='اكتب إيميل الموظف أولاً';input.focus();return;}
+ forgot.disabled=true;
+ try{const result=await sb.auth.resetPasswordForEmail(input.value.trim(),{redirectTo:location.origin+'/'});if(result.error)throw result.error;message.textContent='راجع بريدك لفتح رابط استعادة كلمة المرور.';}
+ catch(err){message.textContent='تعذّر إرسال الرابط. حاول مرة أخرى لاحقاً.';}finally{forgot.disabled=false;}
+ };
+ boot();
+}
 })();
 
 
