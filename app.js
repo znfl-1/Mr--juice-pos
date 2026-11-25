@@ -32,11 +32,11 @@ const ipadPrint = (() => {
   return fetch(url,options);
  }
  const notify=msg=>{const el=document.getElementById('ipad-status');if(el)el.textContent=msg;toast(msg);};
- async function send(ip,body){
+ async function send(ip,body,statusOnly=false){
   if(!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip))throw Error('عنوان الطابعة غير صالح');
   const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),15000);
   try{
-   const r=await fetch('https://'+ip+'/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000',{method:'POST',credentials:'omit',signal:ctl.signal,headers:{'Content-Type':'text/xml; charset=utf-8','SOAPAction':'""'},body:'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">'+body+'<feed line="3"/><cut type="feed"/></epos-print></s:Body></s:Envelope>'});
+   const r=await fetch('https://'+ip+'/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000',{method:'POST',credentials:'omit',signal:ctl.signal,headers:{'Content-Type':'text/xml; charset=utf-8','SOAPAction':'""'},body:'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">'+body+(statusOnly?'':'<feed line="3"/><cut type="feed"/>')+'</epos-print></s:Body></s:Envelope>'});
    const node=new DOMParser().parseFromString(await r.text(),'application/xml').getElementsByTagNameNS('*','response')[0];
    if(!r.ok||node?.getAttribute('success')!=='true')throw Error(node?.getAttribute('code')||'تعذّر تأكيد الطباعة');
   }finally{clearTimeout(timer);}
@@ -82,8 +82,25 @@ const ipadPrint = (() => {
  function mount(){
   let panel=document.getElementById('ipad-panel');
   if(!panel){panel=document.createElement('details');panel.id='ipad-panel';panel.className='card';document.getElementById('cart-panel').append(panel);}
-  function draw(){panel.innerHTML='<summary>الطباعة من هذا الجهاز</summary><p id="ipad-status" role="status"></p><button type="button" class="btn" id="ipad-toggle"></button> <button type="button" class="chip" id="ipad-kitchen"></button>';
+  function draw(){panel.innerHTML='<summary>الطباعة من هذا الجهاز</summary><p id="ipad-status" role="status"></p><button type="button" class="btn" id="ipad-toggle"></button> <button type="button" class="chip" id="ipad-kitchen"></button> <button type="button" class="chip" id="ipad-cash-test">اختبار إيصال الكاشير</button>';
    const toggle=panel.querySelector('#ipad-toggle'),k=panel.querySelector('#ipad-kitchen');toggle.textContent=config.device?'العودة لوسيط الطباعة':'تفعيل طابعة الكاشير على هذا الآيباد';k.hidden=!config.device;k.textContent=config.kitchen?'إرجاع المطبخ للوسيط':'اختبار المطبخ وتفعيله';
+   const test=panel.querySelector('#ipad-cash-test');
+   test.onclick=async()=>{
+    test.disabled=true;let phase='تحميل عنوان الكاشير';
+    try{
+     const result=await sb.from('printers').select('ip').eq('role','cashier').eq('enabled',true).single();
+     if(result.error)throw result.error;
+     phase='الاتصال بطابعة '+result.data.ip;
+     const status=panel.querySelector('#ipad-status');
+     const mode=navigator.standalone||matchMedia('(display-mode: standalone)').matches?'الأيقونة':'Safari';
+     status.textContent='جاري اختبار الاتصال من '+mode;
+     // A status query has no paper or cut command and can be safely repeated.
+     await send(result.data.ip,'',true);
+     phase='طباعة الإيصال العربي بعد نجاح الاتصال';
+     await send(result.data.ip,raster([['Mr Juice'],['اختبار إيصال الكاشير',true],['من '+mode]]));
+     notify('أكّدت طابعة الكاشير طباعة الإيصال من '+mode);
+    }catch(err){notify(phase+' — '+err.message);}finally{test.disabled=false;}
+   };
    toggle.onclick=()=>{if(busy)return;if(config.device){if(!confirm('تحويل الطلبات الجديدة للوسيط؟'))return;config={};}else config={device:crypto.randomUUID(),kitchen:false};save();draw();drain();};
    k.onclick=async()=>{if(config.kitchen){config.kitchen=false;save();draw();return;}k.disabled=true;try{const r=await sb.from('printers').select('ip').eq('role','kitchen').eq('enabled',true).single();if(r.error)throw r.error;await send(r.data.ip,'<text>MR CASHIER - KITCHEN TEST&#10;</text>');if(confirm('هل خرجت ورقة الاختبار من طابعة المطبخ؟'))config.kitchen=true;save();draw();}catch(e){notify('اختبار المطبخ: '+e.message);}finally{k.disabled=false;}};
   }draw();if(!running){running=true;setInterval(drain,4000);}drain();
