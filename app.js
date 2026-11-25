@@ -147,7 +147,7 @@ const ipadPrint = (() => {
      // A status query has no paper or cut command and can be safely repeated.
      await send(result.data.ip,'',true);
      phase='طباعة الإيصال العربي بعد نجاح الاتصال';
-     await send(result.data.ip,raster([['Mr Juice'],['اختبار إيصال الكاشير',true],['من '+mode]]));
+     await send(result.data.ip,await paperLayout({kind:'receipt',settings:{},order:{number:'TEST',created_at:new Date().toISOString(),created_by_name:'كاشير ١',order_type:'dine',method:'cash',total:75,paid:75,items:[]}},[{b:'العصائر الطازجة · بطيخ',z:'L',q:1,p:75}]));
      notify('أكّدت طابعة الكاشير طباعة الإيصال من '+mode);
     }catch(err){notify(phase+' — '+err.message);}finally{test.disabled=false;}
    };
