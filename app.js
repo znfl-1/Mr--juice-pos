@@ -63,43 +63,43 @@ const ipadPrint = (() => {
   let cfg={};try{cfg=JSON.parse(localStorage.getItem('mrjuice_receipt_design')||'{}')||{};}catch{}
   const width=576, pad=12, tile=document.createElement('canvas');tile.width=width;
   const c=tile.getContext('2d'), ops=[];let y=8;
-  const size=Math.max(18,Math.min(36,Number(cfg.font_size)||26));
+  const size=Math.round(Math.max(18,Math.min(36,Number(cfg.font_size)||26))*(k==='receipt'?1.36:1));
   const price=n=>'EGP '+Number(n).toFixed(2);
   const type=({take:'Pick Up',delivery:'Delivery',dine:'Dine In'})[o.order_type]||'Pick Up';
   function text(t,x,align='left',px=size,bold=false,limit=552){
    t=String(t??'');const font=(bold?'bold ':'')+px+'px Arial';c.font=font;
    let lines=[],row='';
    for(const word of t.split(/\s+/)){let next=row?row+' '+word:word;if(row&&c.measureText(next).width>limit){lines.push(row);row=word;}else row=next;}lines.push(row);
-   const top=y,step=px+6;ops.push(()=>{c.font=font;c.fillStyle='black';c.textAlign=align;c.direction=/[\u0600-\u06ff]/.test(t)?'rtl':'ltr';lines.forEach((line,i)=>c.fillText(line,x,top+px+i*step,limit));});return step*lines.length;
+   const top=y,step=px+(k==='receipt'?10:6);ops.push(()=>{c.font=font;c.fillStyle='black';c.textAlign=align;c.direction=/[\u0600-\u06ff]/.test(t)?'rtl':'ltr';lines.forEach((line,i)=>c.fillText(line,x,top+px+i*step,limit));});return step*lines.length;
   }
   function center(t,px=size,bold=false){y+=text(t,width/2,'center',px,bold);}
   function pair(l,r){y+=Math.max(text(l,pad,'left',size,false,265),text(r,width-pad,'right',size,false,265));}
   function rule(){const at=y+3;ops.push(()=>{c.fillStyle='black';c.fillRect(pad,at,width-2*pad,1);});y+=9;}
-  function stamp(timestamp){return new Date(timestamp).toLocaleString('en-GB',{timeZone:'Africa/Cairo',hour12:true});}
+  function stamp(timestamp){if(k==='receipt'){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).formatToParts(new Date(timestamp)).map(p=>[p.type,p.value]));return parts.year+'/'+parts.month+'/'+parts.day+' '+parts.hour+':'+parts.minute+':'+parts.second+' '+parts.dayPeriod;}return new Date(timestamp).toLocaleString('en-GB',{timeZone:'Africa/Cairo',hour12:true});}
   const receipt=k==='receipt',date=o.created_at;
   if(receipt && cfg.show_logo!==false){
    const img=new Image();img.src=cfg.logo_data?.startsWith('data:image/png;base64,')?cfg.logo_data:'/receipt-logo.png';
    try{await img.decode();const scale=Math.min(width*(Number(cfg.logo_width_percent)||75)/100/img.width,150/img.height),w=img.width*scale,h=img.height*scale,top=y;ops.push(()=>c.drawImage(img,(width-w)/2,top,w,h));y+=Math.ceil(h)+4;}catch{center(cfg.shop_name||'Mr Juice');}
   }else center(cfg.shop_name||'Mr Juice');
-  if(receipt){if(cfg.subtitle!== '')center(cfg.subtitle||'Mr.Juice - الرفاعي',22);if(cfg.invoice_title!=='')center(cfg.invoice_title||'Simplified Tax Invoice',22);}
-  const top=y;center('Order# '+num,Number(cfg.order_font_size)||40,true);
-  if(receipt){const h=y-top+4;c.font='bold '+(Number(cfg.order_font_size)||40)+'px Arial';const w=Math.min(540,c.measureText('Order# '+num).width+24);ops.push(()=>{c.strokeStyle='black';c.strokeRect((width-w)/2,top,w,h);});y+=8;}
-  if(!receipt||cfg.show_printed_at!==false)center('Printed At: '+stamp(Date.now()),21);
+  if(receipt){if(cfg.subtitle!== '')center('\u2066'+(cfg.subtitle||'Mr.Juice - الرفاعي')+'\u2069',29);if(cfg.invoice_title!=='')center(cfg.invoice_title||'Simplified Tax Invoice',29);}
+  const top=y;center('Order# '+num,(Number(cfg.order_font_size)||40)*(receipt?1.28:1),true);
+  if(receipt){const h=y-top+4;c.font='bold '+((Number(cfg.order_font_size)||40)*(receipt?1.28:1))+'px Arial';const w=Math.min(540,c.measureText('Order# '+num).width+24);ops.push(()=>{c.strokeStyle='black';c.strokeRect((width-w)/2,top,w,h);});y+=8;}
+  if(!receipt||cfg.show_printed_at!==false)center('Printed At: '+stamp(Date.now()),receipt?30:21);
   rule();
-  if(receipt){pair(type,cfg.show_check_number===false?'':'Check# '+num);center(stamp(date),21);
+  if(receipt){rule();y+=text('الكاشير: '+(o.paid_by_name||o.created_by_name||'كاشير'),width-pad,'right',29);pair(type,cfg.show_check_number===false?'':'Check# '+num);y+=text(stamp(date),width-pad,'right',29);
    if(cfg.show_customer!==false&&o.customer)for(const t of [o.customer.name,o.customer.phone,o.customer.address])if(t)center(t,22);
-   rule();y+=Math.max(text('Qty',pad),text('Item',80),text('Price',564,'right'));rule();
+   rule();y+=Math.max(text('Qty',pad),text('Item',76),text('Price',564,'right'));rule();
   }else{pair('Type:',type);pair('Guests:','1');pair('Device:',o.created_by_name||'Cashier');pair('Date:',stamp(date).split(',')[0]);pair('Time:',new Date(date).toLocaleTimeString('en-US',{timeZone:'Africa/Cairo'}));rule();center('New');rule();}
   for(const i of items){const label=i.b?(i.b+(i.z?' '+i.z:'')):i.n;
-   y+=Math.max(text(i.q,pad,'left',size,false,58),text(label,80,'left',size,false,receipt?286:476),receipt?text(price(i.q*i.p),564,'right',size,false,182):0);
+   y+=Math.max(text(i.q,pad,'left',size,false,58),text(label,receipt?76:80,'left',size,false,receipt?265:476),receipt?text(price(i.q*i.p),564,'right',size,false,211):0);
    if(i.note&&job.settings[receipt?'receipt_notes':'pickup_notes'])y+=text('ملاحظة: '+i.note,80,'left',22,false,470);
    if(!receipt)rule();
   }
   if(receipt){rule();const adjustments=o.items.filter(i=>i.__pos_adjustment);if(adjustments.length)pair('Subtotal',price(items.reduce((a,i)=>a+i.q*i.p,0)));
-   for(const a of adjustments)pair(a.n,price(a.kind==='discount'?-a.amount:a.amount));pair('Total',price(o.total));pair('Payment - '+(o.method==='card'?'Visa':'Cash'),price(o.paid??o.total));
-   if(o.paid!=null&&o.paid>o.total)pair('Change',price(o.paid-o.total));rule();
-   if(cfg.show_product_count!==false)center('Products Count '+items.reduce((a,i)=>a+Number(i.q),0),22);
-   if(cfg.footer)center(cfg.footer,22);if(cfg.delivery_phone!=='')center('For delivery: '+(cfg.delivery_phone||'0402232302'),22);
+   for(const a of adjustments)pair(a.n,price(a.kind==='discount'?-a.amount:a.amount));function amountRow(label,value){y+=Math.max(text(label,350,'right',size,false,335),text(value,564,'right',size,false,205));}amountRow('Total',price(o.total));amountRow('Payment - '+(o.method==='card'?'Visa':'Cash'),price(o.paid??o.total));
+   if(o.paid!=null&&o.paid>o.total)amountRow('Change',price(o.paid-o.total));rule();
+   if(cfg.show_product_count!==false)center('Products Count '+items.reduce((a,i)=>a+Number(i.q),0),size);
+   if(cfg.footer)center(cfg.footer,22);if(cfg.delivery_phone!=='')center('For delivery: '+(cfg.delivery_phone||'0402232302'),30);
   }
   const height=Math.ceil(y+12);let xml='';
   for(let start=0;start<height;start+=256){tile.height=Math.min(256,height-start);c.fillStyle='white';c.fillRect(0,0,width,tile.height);c.save();c.translate(0,-start);for(const draw of ops)draw();c.restore();
