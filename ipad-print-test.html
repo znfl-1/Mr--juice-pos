@@ -1,0 +1,13 @@
+<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>اختبار الطباعة</title><style>body{padding:2em;font:18px system-ui}button{font:inherit;padding:1em}</style><h1>طابعة الكاشير</h1><p>TM-T20III · 192.168.1.48</p><button id="test">طباعة ورقة اختبار واحدة</button><p id="msg" role="status"></p><script>
+document.querySelector('#test').onclick=async function(){
+ this.disabled=true;
+ const msg=document.querySelector('#msg'), controller=new AbortController();
+ msg.textContent='جاري الاتصال بالطابعة…';
+ const timer=setTimeout(()=>controller.abort(),15000);
+ try{
+ const r=await fetch('https://192.168.1.48/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000',{method:'POST',credentials:'omit',signal:controller.signal,headers:{'Content-Type':'text/xml; charset=utf-8','SOAPAction':'""'},body:'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"><text>MR CASHIER - iPad test&#10;</text><feed line="3"/><cut type="feed"/></epos-print></s:Body></s:Envelope>'});
+ const result=new DOMParser().parseFromString(await r.text(),'application/xml').getElementsByTagNameNS('*','response')[0];
+ msg.textContent=result?.getAttribute('success')==='true'?'الطابعة أكدت استلام طلب الطباعة':'رد الطابعة: '+(result?.getAttribute('code')||'HTTP '+r.status);
+ }catch(e){msg.textContent='تعذّر تأكيد الطباعة. راجع الورقة قبل إعادة الاختبار. '+e.message;}finally{clearTimeout(timer);}
+};
+</script></html>
