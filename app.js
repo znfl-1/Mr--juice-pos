@@ -436,6 +436,7 @@ renderCart();
 function renderCart() {
 var items = cartItems(), total = cartTotal(), count = sum(items, function (i) { return i.q; });
 $('#cart-count').textContent = count ? count + ' صنف' : '';
+$('#otype').hidden = !items.length;
 $('#lines').innerHTML = items.length ? items.map(function (i) {
 return '<div class="line"><div class="ln">' + esc(i.n) + '<div class="ls num">' + money(i.price) + '</div><button class="notebtn' + (i.note ? ' has' : '') + '" data-note="' + esc(i.key) + '">' + (i.note ? 'ملاحظة: ' + esc(i.note) : '+ ملاحظة للمطبخ') + '</button></div>' +
 '<div class="stepper"><button class="step" data-dec="' + esc(i.key) + '" aria-label="إنقاص">−</button><span class="n num">' + i.q + '</span><button class="step" data-inc="' + esc(i.key) + '" aria-label="زيادة">+</button></div>' +
@@ -454,6 +455,7 @@ $('#total').textContent = money(total);
 $('#nav-total').textContent = money(total);
 var cb = $('#nav-cart'); cb.classList.toggle('on', S.view === 'pos' && count > 0);
 $('#checkout').disabled = !items.length || basketLocked();
+$('#checkout').textContent = items.length ? 'ادفع · ' + money(total) : 'ادفع';
 $('#clear').disabled = !items.length || basketLocked();
 $('#kitchen').disabled = !items.length || basketLocked();
 var pending=$('#pending-order');if(pending){pending.hidden=!S.pendingOrder;pending.innerHTML=S.pendingOrder?'<p>نتيجة حفظ الطلب غير مؤكدة. إجمالي الطلب: '+money(S.pendingOrder.payload.total)+'. أكّد النتيجة قبل إنشاء طلب جديد.</p><button class="btn" id="pending-order-retry" '+(S.busy?'disabled':'')+'>التحقق وإكمال نفس الطلب</button>':'';}
@@ -468,7 +470,20 @@ ch.hidden = false;
 if (paid >= total) { ch.style.color = 'var(--good)'; $('#change-v').textContent = money(paid - total); $('#change-l').textContent = 'الباقي للعميل'; }
 else { ch.style.color = 'var(--bad)'; $('#change-v').textContent = money(total - paid); $('#change-l').textContent = 'ناقص'; }
 } else ch.hidden = true;
+var ct = $('#cpay-total'); if (ct) ct.textContent = money(total);
+var cd2 = $('#cpay-discount'); if (cd2) cd2.textContent = S.discount ? 'تعديل الخصم ' + S.discount + '%' : 'إضافة خصم %';
+document.querySelectorAll('#cpay-method button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.cpm === S.method)); });
+var cpr = $('#cpay-paid-row'); if (cpr) cpr.hidden = S.method !== 'cash';
+var cc = $('#cpay-change');
+if (cc) {
+if (S.method === 'cash' && !isNaN(paid) && items.length) {
+cc.hidden = false;
+if (paid >= total) { cc.style.color = 'var(--good)'; $('#cpay-change-v').textContent = money(paid - total); $('#cpay-change-l').textContent = 'الباقي للعميل'; }
+else { cc.style.color = 'var(--bad)'; $('#cpay-change-v').textContent = money(total - paid); $('#cpay-change-l').textContent = 'ناقص'; }
+} else cc.hidden = true;
 }
+}
+function openCartPay() { if (!cartItems().length || basketLocked()) return; $('#cpay-paid').value = S.paid; $('#cartpayscrim').hidden = false; renderCart(); }
 function addToCart(key) { S.cart[key] = (S.cart[key] || 0) + 1; renderPos(); }
 var pendingTypePid = null;
 function openTypeSheet() {
@@ -862,18 +877,22 @@ var p = S.products.find(function (x) { return x.id === t.dataset.p; }); if (!p) 
 if (!Object.keys(S.cart).length && !S.typePicked) { pendingTypePid = p.id; openTypeSheet(); return; }
 return p.sizes ? openSheet(p) : addToCart(p.id + '|');
 }
-if (t.dataset.typepick) { S.otype = t.dataset.typepick; S.typePicked = true; if (S.otype !== 'delivery') { S.deliveryFee = 0; $('#delivery-fee').value = ''; } $('#scrim').hidden = true; renderCart(); renderCust(true); var pp = S.products.find(function (x) { return x.id === pendingTypePid; }); pendingTypePid = null; if (pp) { if (pp.sizes) openSheet(pp); else addToCart(pp.id + '|'); } return; }
+if (t.dataset.typepick) { S.otype = t.dataset.typepick; S.typePicked = true; if (S.otype !== 'delivery') { S.deliveryFee = 0; $('#delivery-fee').value = ''; } $('#scrim').hidden = true; renderCart(); renderCust(true); if (S.otype === 'delivery') { var cv = $('#cust'); if (cv) setTimeout(function () { cv.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 60); } var pp = S.products.find(function (x) { return x.id === pendingTypePid; }); pendingTypePid = null; if (pp) { if (pp.sizes) openSheet(pp); else addToCart(pp.id + '|'); } return; }
 if (t.dataset.size) { $('#scrim').hidden = true; return addToCart(t.dataset.pid + '|' + t.dataset.size); }
 if (t.id === 'sheet-x') { $('#scrim').hidden = true; return; }
 if (t.dataset.inc) { S.cart[t.dataset.inc]++; return renderPos(); }
 if (t.dataset.dec) { var k = t.dataset.dec; S.cart[k]--; if (S.cart[k] <= 0) delete S.cart[k]; if (!Object.keys(S.cart).length) S.typePicked = false; return renderPos(); }
 if (t.dataset.m) { S.method = t.dataset.m; return renderCart(); }
-if (t.dataset.t) { S.otype = t.dataset.t; S.typePicked = true; if(S.otype!=='delivery'){S.deliveryFee=0;$('#delivery-fee').value='';} renderCart(); return renderCust(true); }
+if (t.dataset.t) { S.otype = t.dataset.t; S.typePicked = true; if(S.otype!=='delivery'){S.deliveryFee=0;$('#delivery-fee').value='';} renderCart(); renderCust(true); if (S.otype === 'delivery') { var cv2 = $('#cust'); if (cv2) setTimeout(function () { cv2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 60); } return; }
 if(t.id==='clear'&&S.role!=='admin'&&Object.keys(S.cart).length){return CancelSecurity.open(null,function(){S.cart={};S.typePicked=false;clearAdjustments();S.paid='';$('#paid').value='';renderPos();});}
 if (t.id === 'clear') { S.cart = {}; S.typePicked = false; clearAdjustments(); S.paid = ''; $('#paid').value = ''; return renderPos(); }
 if (t.id === 'cu-import') { var cf = $('#cu-file'); if (cf) cf.click(); return; }
 if (t.id === 'prod-import') { var pf = $('#prod-file'); if (pf) pf.click(); return; }
-if (t.id === 'checkout') return checkout();
+if (t.id === 'checkout') { openCartPay(); return; }
+if (t.dataset.cpm) { S.method = t.dataset.cpm; return renderCart(); }
+if (t.id === 'cpay-ok') { $('#cartpayscrim').hidden = true; return checkout(); }
+if (t.id === 'cpay-x') { $('#cartpayscrim').hidden = true; return; }
+if (t.id === 'cpay-discount') { $('#discountscrim').hidden = false; return; }
 if (t.dataset.range) { S.range = t.dataset.range; return renderAdmin(); }
 if(t.dataset.del&&t.dataset.del.startsWith('ocancel:')&&S.role!=='admin'){return CancelSecurity.open(t.dataset.del.slice(8));}
 if(t.id==='refund-confirm')return confirmRefund();
@@ -971,6 +990,7 @@ else if (e.target.id === 'c-q') { S.custQ = e.target.value; renderCustList(); }
 else if (e.target.id === 'cu-q') { S.cuQ = e.target.value; var el = e.target, pos = el.selectionStart; renderCustomers(); var n2 = document.getElementById('cu-q'); if (n2) { n2.focus(); try { n2.setSelectionRange(pos, pos); } catch (x) {} } }
 });
 $('#paid').addEventListener('input', function (e) { if(basketLocked()){e.target.value=S.paid;return;}S.paid = e.target.value; renderCart(); });
+$('#cpay-paid').addEventListener('input', function (e) { if(basketLocked()){e.target.value=S.paid;return;} S.paid = e.target.value; renderCart(); });
 async function boot() {
 var v = 'pos';
 try { v = localStorage.getItem(LS + 'view') || 'pos'; } catch (e) {}
