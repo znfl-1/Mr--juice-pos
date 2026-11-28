@@ -91,7 +91,7 @@ const ipadPrint = (() => {
    if(cfg.show_customer!==false&&o.customer)for(const t of [o.customer.name,o.customer.phone,o.customer.address])if(t)center(t,22);
    rule();y+=Math.max(text('Qty',pad),text('Item',76),text('Price',564,'right'));rule();
   }else{pair('Type:',type);pair('Guests:','1');pair('Device:',o.created_by_name||'Cashier');pair('Date:',stamp(date).split(',')[0]);pair('Time:',new Date(date).toLocaleTimeString('en-US',{timeZone:'Africa/Cairo'}));rule();center('New');rule();}
-  for(const i of items){const label=String(i.b||i.n||'').split(' · ').slice(-1)[0]+(i.b&&i.z?' '+i.z:'');
+  for(const i of items){const label=(receipt?String(i.b||i.n||'').split(' · ').slice(-1)[0]:String(i.b||i.n||''))+(i.b&&i.z?' '+i.z:'');
    y+=Math.max(text(i.q,pad,'left',size,false,58),text(label,receipt?76:80,'left',size,false,receipt?265:476),receipt?text(price(i.q*i.p),564,'right',size,false,211):0);
    if(i.note&&job.settings[{receipt:'receipt_notes',pickup:'pickup_notes',kitchen:'kitchen_notes'}[k]])y+=text('ملاحظة: '+i.note,80,'left',22,false,470);
    if(!receipt)rule();
@@ -819,6 +819,7 @@ function setView(v) {
 if(S.role==='admin'&&v==='pos')v='admin';
 if ((v==='admin'||v==='products') && S.role!=='admin') v='pos';
 S.view = v;
+document.body.dataset.view = v;
 ['pos', 'orders', 'customers', 'admin', 'products', 'till', 'printing'].forEach(function (k) { $('#view-' + k).hidden = k !== v; $('#nav-' + k).setAttribute('aria-pressed', String(k === v)); });
 try { localStorage.setItem(LS + 'view', v); } catch (e) {}
 window.scrollTo(0, 0);
@@ -924,6 +925,7 @@ if (t.id === 'more-print') { $('#morescrim').hidden = true; reprintLatest(); ret
 if (t.id === 'more-printing') { $('#morescrim').hidden = true; return setView('printing'); }
 if (t.id === 'more-customers') { $('#morescrim').hidden = true; return setView('customers'); }
 if (t.id === 'more-till') { $('#morescrim').hidden = true; return setView('till'); }
+if (t.id === 'more-logout') { $('#morescrim').hidden = true; $('#logout').click(); return; }
 if (t.id === 'oa-kitchen') { var bk = document.querySelector('#view-orders [data-print="' + S.selectedOrderId + '"][data-role="kitchen"]'); if (bk) { bk.click(); } else toast('طباعة المطبخ مش متاحة للطلب المحدد'); return; }
 if (t.id === 'oa-cancel') { var bc = document.querySelector('#view-orders [data-del="ocancel:' + S.selectedOrderId + '"]'); if (bc) { bc.click(); } else toast('الطلب المحدد مينفعش يتلغي'); return; }
 if (t.id === 'oa-discount') { return toast('الخصم بيتحط وقت إنشاء الطلب، مش بعد حفظه'); }
