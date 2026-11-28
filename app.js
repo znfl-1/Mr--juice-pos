@@ -922,6 +922,8 @@ if (t.id === 'ab-more') { $('#morescrim').hidden = false; return; }
 if (t.id === 'more-x') { $('#morescrim').hidden = true; return; }
 if (t.id === 'more-print') { $('#morescrim').hidden = true; reprintLatest(); return; }
 if (t.id === 'more-printing') { $('#morescrim').hidden = true; return setView('printing'); }
+if (t.id === 'more-customers') { $('#morescrim').hidden = true; return setView('customers'); }
+if (t.id === 'more-till') { $('#morescrim').hidden = true; return setView('till'); }
 if (t.id === 'more-orders') { $('#morescrim').hidden = true; return setView('orders'); }
 if (t.id === 'om-tag') { S.orderTag = ''; return renderCart(); }
 if (t.id === 'om-note') { S.orderNote = ''; return renderCart(); }
