@@ -19,7 +19,7 @@ var SB_URL = 'https://njrejjufurycusjhzfdv.supabase.co';
 var SB_KEY = 'sb_publishable_QTk_CJO1kCz53R32-JNgBg_2vTq-Lvu';
 const ipadPrint = (() => {
  const key='mr-cashier-ipad-print-v1';
- let config=JSON.parse(localStorage.getItem(key)||'{}'), busy=false, running=false;
+ let config=JSON.parse(localStorage.getItem(key)||'{}'), busy=false, running=false, tillBusy=false;
  const save=()=>localStorage.setItem(key,JSON.stringify(config));
  function transport(url,options={}) {
   const path=new URL(typeof url==='string'?url:url.url||String(url),location.href);
@@ -129,6 +129,44 @@ const ipadPrint = (() => {
    const ack=await sb.rpc('ipad_finish',{d,j:job.id,ok,msg});if(ack.error)throw ack.error;
   }}catch(e){notify('تعذّر تأكيد حالة طباعة الآيباد');}finally{busy=false;}
  }
+ function tillBody(report){
+  const t=report.session,s=report.summary||{},sep='————————————————';
+  const row=(label,key,bold)=>[label+': '+money(Number(s[key]||0)),!!bold];
+  const lines=[['Mr Juice',true],['ملخص العهدة',true],['تاريخ العمل: '+t.business_date],['الكاشير: '+(t.cashier_name||'كاشير')],[String(t.drawer||'')],['الفتح: '+dateFmt(Date.parse(t.opened_at))+' '+timeFmt(Date.parse(t.opened_at))],['الإغلاق: '+dateFmt(Date.parse(t.closed_at))+' '+timeFmt(Date.parse(t.closed_at))],[sep],['المدفوعات',true],
+   row('مبيعات كاش','cash_sales'),row('مبيعات كارت','card_sales'),row('إجمالي المدفوعات','total_payments',true),row('مرتجعات كاش','cash_refunds'),row('مرتجعات كارت','card_refunds'),row('صافي المدفوعات','net_payments',true),[sep],['حركات الدرج',true],
+   row('المصروفات','expenses'),row('إضافات نقدية','pay_in'),row('سحب كاش','pay_out'),row('توريد للخزنة','cash_drops')];
+  const expenses=(report.entries||[]).filter(e=>e.kind==='expense');
+  if(expenses.length){lines.push([sep],['تفاصيل المصروفات',true]);for(const e of expenses){lines.push([e.title+': '+money(Math.abs(Number(e.amount||0)))]);if(e.category)lines.push([e.category]);if(e.note)lines.push([e.note]);}}
+  const d=t.difference!=null?Number(t.difference):Number(t.counted_amount||0)-Number(s.expected_cash||0);
+  lines.push([sep],['كاش بداية العهدة: '+money(Number(t.opening_amount||0))],['الكاش المتوقع في الدرج: '+money(Number(s.expected_cash||0)),true],['الكاش الفعلي: '+money(Number(t.counted_amount||0)),true],
+   [d<0?'العجز: '+money(Math.abs(d)):d>0?'الزيادة: '+money(d):'الفرق: العهدة مطابقة',true]);
+  if(t.close_note)lines.push([sep],['ملاحظة الإغلاق: '+t.close_note]);
+  return raster(lines);
+ }
+ async function drainTill(){
+  if(tillBusy||!config.device||!myEmail||S.role!=='cashier'||document.hidden)return;
+  tillBusy=true;
+  try{
+   const stale=new Date(Date.now()-3*60000).toISOString();
+   const q=await sb.from('till_print_jobs').select('id,session_id,attempts,status,created_at').or('status.eq.pending,and(status.eq.printing,created_at.lt."'+stale+'")').order('created_at',{ascending:true}).limit(3);
+   if(q.error)return;
+   for(const job of (q.data||[])){
+    const claim=await sb.from('till_print_jobs').update({status:'printing',attempts:(job.attempts||0)+1}).eq('id',job.id).eq('status',job.status).select('id');
+    if(claim.error||!claim.data||!claim.data.length)continue;
+    try{
+     const rep=await sb.rpc('till_report',{p_session:job.session_id});if(rep.error)throw rep.error;const report=rep.data;
+     if(!report||!report.session||report.session.state!=='closed')throw Error('العهدة لم تُغلق بعد');
+     const pr=await sb.from('printers').select('ip').eq('role','cashier').eq('enabled',true).single();if(pr.error)throw pr.error;
+     await send(pr.data.ip,tillBody(report));
+     await sb.from('till_print_jobs').update({status:'done',printed_at:new Date().toISOString(),error:null}).eq('id',job.id);
+     notify('تمت طباعة ملخص العهدة من هذا الآيباد');
+    }catch(e){
+     await sb.from('till_print_jobs').update({status:'pending',error:String(e.message||e).slice(0,300)}).eq('id',job.id);
+     notify('تعذّرت طباعة ملخص العهدة — '+(e.message||e));
+    }
+   }
+  }catch(e){}finally{tillBusy=false;}
+ }
  function mount(){
   let panel=document.getElementById('ipad-panel');
   if(!panel){panel=document.createElement('details');panel.id='ipad-panel';panel.className='card';document.getElementById('view-printing').append(panel);panel.open=true;}
@@ -153,7 +191,7 @@ const ipadPrint = (() => {
    };
    toggle.onclick=()=>{if(busy)return;if(config.device){if(!confirm('تحويل الطلبات الجديدة للوسيط؟'))return;config={};}else config={device:crypto.randomUUID(),kitchen:false};save();draw();drain();};
    k.onclick=async()=>{if(config.kitchen){config.kitchen=false;save();draw();return;}k.disabled=true;try{const r=await sb.from('printers').select('ip').eq('role','kitchen').eq('enabled',true).single();if(r.error)throw r.error;await send(r.data.ip,'<text>MR CASHIER - KITCHEN TEST&#10;</text>');if(confirm('هل خرجت ورقة الاختبار من طابعة المطبخ؟'))config.kitchen=true;save();draw();}catch(e){notify('اختبار المطبخ: '+e.message);}finally{k.disabled=false;}};
-  }draw();if(!running){running=true;setInterval(drain,4000);}drain();
+  }draw();if(!running){running=true;setInterval(()=>{drain();drainTill();},4000);}drain();drainTill();
  }
  return {transport,mount};
 })();
