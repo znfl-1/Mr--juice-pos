@@ -212,6 +212,9 @@ html,body{touch-action:manipulation}
 /* Cart stays fixed beside the catalog while the page scrolls */
 .receipt{position:sticky;top:12px;max-height:calc(100dvh - 124px);overflow-y:auto}
 
+/* Highlight the products subtotal so the eye lands on it */
+#subtotal-row{background:var(--surface2);border-radius:10px;padding:10px 12px;font-weight:600}
+
 </style>
 <link rel="icon" type="image/png" href="/icon-192-v518.png" sizes="192x192">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v518.png">
@@ -253,7 +256,7 @@ html,body{touch-action:manipulation}
 <div class="lines" id="lines"></div>
 <div class="pricing-tools"><button class="chip" id="discount-open">إضافة خصم %</button><span class="note">الخصم على المنتجات فقط</span></div>
 <div id="delivery-controls" class="delivery-controls" hidden><label for="delivery-fee">رسوم الدليفري</label><div class="fee-input"><input class="in num" id="delivery-fee" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"><span>ج.م</span><button id="delivery-remove" class="del" aria-label="إلغاء رسوم الدليفري">إلغاء</button></div></div>
-<div class="summary-row"><span>مجموع المنتجات</span><span class="num" id="subtotal">0 ج.م</span></div>
+<div class="summary-row" id="subtotal-row"><span>مجموع المنتجات</span><span class="num" id="subtotal">0 ج.م</span></div>
 <div class="summary-row discount-row" id="discount-row" hidden><span id="discount-label"></span><span class="num" id="discount-value"></span><button id="discount-remove" aria-label="إلغاء الخصم">×</button></div>
 <div class="summary-row" id="delivery-summary" hidden><span>رسوم الدليفري</span><span class="num" id="delivery-value"></span></div>
 <div class="total"><span>الإجمالي</span><span class="num" id="total">0 ج.م</span></div>
