@@ -63,7 +63,7 @@ const ipadPrint = (() => {
   let cfg={};try{cfg=JSON.parse(localStorage.getItem('mrjuice_receipt_design')||'{}')||{};}catch{}
   const width=576, pad=12, tile=document.createElement('canvas');tile.width=width;
   const c=tile.getContext('2d'), ops=[];let y=8;
-  const size=Math.round(Math.max(18,Math.min(36,Number(cfg.font_size)||26))*(k==='receipt'?1.36:1));
+  const size=Math.round(Math.max(18,Math.min(36,Number(cfg.font_size)||26))*(k==='receipt'?1.36:k==='pickup'?1.55:1));
   const price=n=>'EGP '+Number(n).toFixed(2);
   const type=({take:'Pick Up',delivery:'Delivery',dine:'Dine In'})[o.order_type]||'Pick Up';
   function text(t,x,align='left',px=size,bold=false,limit=552){
