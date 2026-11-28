@@ -19,7 +19,7 @@ var SB_URL = 'https://njrejjufurycusjhzfdv.supabase.co';
 var SB_KEY = 'sb_publishable_QTk_CJO1kCz53R32-JNgBg_2vTq-Lvu';
 const ipadPrint = (() => {
  const key='mr-cashier-ipad-print-v1';
- let config=JSON.parse(localStorage.getItem(key)||'{}'), busy=false, running=false, tillBusy=false;
+ let config=JSON.parse(localStorage.getItem(key)||'{}'), busy=false, running=false, tillBusy=false, tillErrShown=false;
  const save=()=>localStorage.setItem(key,JSON.stringify(config));
  function transport(url,options={}) {
   const path=new URL(typeof url==='string'?url:url.url||String(url),location.href);
@@ -149,7 +149,7 @@ const ipadPrint = (() => {
   try{
    const stale=new Date(Date.now()-3*60000).toISOString();
    const q=await sb.from('till_print_jobs').select('id,session_id,attempts,status,created_at').or('status.eq.pending,and(status.eq.printing,created_at.lt."'+stale+'")').order('created_at',{ascending:true}).limit(3);
-   if(q.error)return;
+   if(q.error){if(!tillErrShown){tillErrShown=true;notify('طباعة ملخص العهدة متوقفة: صلاحيات جدول الطباعة ناقصة في قاعدة البيانات');}return;}
    for(const job of (q.data||[])){
     const claim=await sb.from('till_print_jobs').update({status:'printing',attempts:(job.attempts||0)+1}).eq('id',job.id).eq('status',job.status).select('id');
     if(claim.error||!claim.data||!claim.data.length)continue;
