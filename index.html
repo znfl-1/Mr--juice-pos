@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="5.25">
+<meta name="app-version" content="5.26">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -218,6 +218,14 @@ html,body{touch-action:manipulation}
 /* Foodics-style cart: items and the pay button only; payment choices live in the pay sheet */
 #cart-panel #method, #cart-panel #paid-row, #cart-panel #change, #cart-panel .pricing-tools{display:none!important}
 
+/* Foodics-style purple action bar (vector icons, crisp at any resolution) */
+.actbar{display:flex;gap:10px;margin-bottom:12px}
+.actbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 4px 10px;border:0;border-radius:10px;background:#5f259f;color:#fff;font-weight:600;font-size:.85rem;cursor:pointer}
+.actbtn svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.actbtn:active{transform:scale(.96)}
+#order-meta{display:flex;gap:8px;flex-wrap:wrap}
+#order-meta:empty{display:none}
+
 </style>
 <link rel="icon" type="image/png" href="/icon-192-v518.png" sizes="192x192">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v518.png">
@@ -244,12 +252,13 @@ html,body{touch-action:manipulation}
 </header>
 <main id="view-pos" class="pos">
 <section class="catalog">
+<div class="actbar" role="toolbar" aria-label="إجراءات سريعة"><button class="actbtn" id="ab-more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>المزيد</button><button class="actbtn" id="ab-tags"><svg viewBox="0 0 24 24"><path d="M3 3h8l10 10-8 8L3 11z"/><circle cx="8" cy="8" r="1.8"/></svg>وسوم</button><button class="actbtn" id="ab-notes"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>ملاحظات</button><button class="actbtn" id="ab-discount"><svg viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="17" r="2.2"/><path d="M18 5L6 19"/></svg>خصم</button><button class="actbtn" id="ab-cancel"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/></svg>إلغاء</button><button class="actbtn" id="ab-kitchen"><svg viewBox="0 0 24 24"><path d="M7 14.5A3.8 3.8 0 1 1 8.2 7.1a5.2 5.2 0 0 1 7.6 0A3.8 3.8 0 1 1 17 14.5z"/><path d="M7 14.5h10v3H7z"/><path d="M4.5 20.5h15"/></svg>مطبخ</button><button class="actbtn" id="ab-print"><svg viewBox="0 0 24 24"><path d="M7 8V3h10v5"/><rect x="4" y="8" width="16" height="8" rx="2"/><path d="M7 13h10v8H7z"/></svg>طباعة</button></div>
 <input class="search" id="q" type="search" placeholder="ابحث عن منتج… اكتب أول حرف" aria-label="البحث في كل المنتجات" autocomplete="off">
 <div class="crumb" id="crumb"></div>
 <div class="tiles" id="tiles"></div>
 </section>
 <aside class="receipt" id="cart-panel" aria-label="الطلب">
-<h2>الطلب الحالي <small id="cart-count"></small></h2><div id="pending-order" class="card" role="status" hidden></div>
+<h2>الطلب الحالي <small id="cart-count"></small></h2><div id="pending-order" class="card" role="status" hidden></div><div id="order-meta"></div>
 <div class="seg" id="otype">
 <button data-t="dine" aria-pressed="true">صالة</button>
 <button data-t="take" aria-pressed="false">تيك أواي</button>
@@ -282,6 +291,7 @@ html,body{touch-action:manipulation}
 <main id="view-till" class="page" hidden></main>
 </div>
 <nav class="nav" aria-label="التنقل">
+<button id="nav-new" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>جديد</button>
 <button id="nav-pos" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>الرئيسية</button>
 <button id="nav-orders" aria-pressed="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>الطلبات<b class="badge num" id="ob" hidden></b></button>
 <button id="nav-customers" aria-pressed="false"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.7 3.2 2.5 3.5 5.2"/></svg>العملاء</button>
@@ -318,6 +328,9 @@ html,body{touch-action:manipulation}
 <button class="btn ghost" id="pay-x">رجوع للطلب</button></div></div>
 </div>
 </div>
+<div class="scrim" id="onotescrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="onote-t"><h3 id="onote-t">ملاحظة على الطلب</h3><p class="note">بتتطبع مع أول صنف في الإيصال وورقة المطبخ.</p><div class="field"><label for="onote-in">الملاحظة</label><input class="in" id="onote-in" maxlength="120" placeholder="مثال: الطلب لعميل مستعجل" autocomplete="off"></div><button class="btn" id="onote-ok">حفظ الملاحظة</button><button class="btn ghost" id="onote-x">رجوع</button></div></div>
+<div class="scrim" id="tagscrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="tag-t"><h3 id="tag-t">وسوم الطلب</h3><p class="note">اختار وسم واحد للطلب — بيظهر في السلة وبيتطبع مع أول صنف.</p><div class="chips" id="tag-chips"></div><button class="btn ghost" id="tag-x">رجوع</button></div></div>
+<div class="scrim" id="morescrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="more-t"><h3 id="more-t">المزيد</h3><button class="btn" id="more-print">إعادة طباعة آخر إيصال</button><button class="btn" id="more-orders">الطلبات</button><button class="btn" id="more-printing">صفحة الطباعة</button><button class="btn ghost" id="more-x">رجوع</button></div></div>
 <div class="scrim" id="cartpayscrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cpay-t"><h3 id="cpay-t">الدفع</h3><div class="total"><span>الإجمالي</span><span class="num" id="cpay-total"></span></div><div class="seg" id="cpay-method"><button data-cpm="cash" aria-pressed="true">كاش</button><button data-cpm="card" aria-pressed="false">فيزا</button></div><div class="field" id="cpay-paid-row"><label for="cpay-paid">المبلغ المدفوع</label><input class="in num" id="cpay-paid" inputmode="decimal" placeholder="0" autocomplete="off"></div><div class="change" id="cpay-change" hidden><span id="cpay-change-l">الباقي للعميل</span><span class="num" id="cpay-change-v"></span></div><button class="chip" id="cpay-discount">إضافة خصم %</button><button class="btn" id="cpay-ok">تأكيد الدفع</button><button class="btn ghost" id="cpay-x">رجوع</button></div></div>
 <div class="scrim" id="discountscrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="discount-title"><h3 id="discount-title">خصم على الطلب</h3><p class="note">يُحسب على قيمة المنتجات قبل رسوم الدليفري.</p><label for="discount-input">نسبة الخصم %</label><input class="in num" id="discount-input" type="number" min="0" max="100" step="0.5" inputmode="decimal" placeholder="10"><div class="chips"><button class="chip" data-discount-preset="5">5%</button><button class="chip" data-discount-preset="10">10%</button><button class="chip" data-discount-preset="15">15%</button><button class="chip" data-discount-preset="20">20%</button></div><button class="btn" id="discount-apply">تطبيق الخصم</button><button class="btn ghost" id="discount-close">إلغاء</button></div></div>
 <div class="scrim" id="productscrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="product-title"><h3 id="product-title">منتج جديد</h3><label for="edit-name">اسم المنتج</label><input class="in" id="edit-name" maxlength="120"><label for="edit-category">التصنيف</label><select class="in" id="edit-category"></select><div class="price-fields"><label>سعر M أو السعر الموحد<input class="in num" id="edit-price" type="number" min="0" step="0.01" inputmode="decimal"></label><label>سعر L — اختياري<input class="in num" id="edit-lprice" type="number" min="0" step="0.01" inputmode="decimal"></label></div><label><input type="checkbox" id="edit-active" checked> متاح للبيع</label><p class="neg-v" id="product-error" role="alert"></p><button class="btn" id="product-save">حفظ المنتج</button><button class="btn ghost" id="product-cancel">إلغاء</button></div></div>
@@ -329,6 +342,6 @@ html,body{touch-action:manipulation}
 <script src="native-print.js"></script>
 <script src="till.js?v=522"></script>
 <script src="print-settings.js?v=522"></script>
-<script src="app.js?v=525"></script>
+<script src="app.js?v=526"></script>
 </body>
 </html>

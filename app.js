@@ -11,9 +11,10 @@ var TYPE = { dine: 'صالة', take: 'تيك أواي', delivery: 'دليفري'
 var CAT_ORDER = ['العصائر الطازجة', 'سموزي', 'ميلك شيك', 'موهيتو', 'الزبادي اليوناني', 'جيلاتو', 'ساندي', 'العصائر العائلية', 'وافل', 'بان كيك', 'فروت سلاط', 'قهوة', 'أيس كوفي'];
 var COLS = ['products', 'sales', 'expenses'];
 var NOTE_CHIPS = ['بدون سكر', 'سكر خفيف', 'سكر زيادة', 'سكر على جنب', 'بدون ثلج', 'ثلج زيادة', 'بدون لبن', 'بدون نعناع', 'بدون كريمة', 'بدون مكسرات'];
+var TAGS = ['طلب مستعجل', 'عميل دائم', 'توصيل سريع', 'طلب كبير', 'حفلة', 'مناسبة'];
 var STATE_AR = { active: 'نشط', completed: 'مكتمل', refunded: 'مرتجع', cancelled: 'ملغي' };
 var STAR = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6v36M8.4 15l31.2 18M8.4 33l31.2-18"/></svg>';
-var S = { view: 'pos', cat: null, q: '', method: 'cash', otype: 'dine', typePicked: false, paid: '', range: 'today', dateFrom: '', dateTo: '', discount: 0, deliveryFee: 0, categories: [], productCat: '', productQ: '', armed: '', busy: false, pendingOrder: null, loading: true, role: 'cashier', staff: [], customers: [], cust: null, newCust: false, custQ: '', cuQ: '', orders: [], ofilter: 'active', orderQ: '', selectedOrderId: null, payBusy: false, refundId: null, refundBusy: false, payId: null, payM: 'cash', payPaid: '', note: null, products: [], sales: [], expenses: [], cart: {} };
+var S = { view: 'pos', cat: null, q: '', method: 'cash', otype: 'dine', typePicked: false, paid: '', range: 'today', dateFrom: '', dateTo: '', discount: 0, deliveryFee: 0, categories: [], productCat: '', productQ: '', armed: '', busy: false, pendingOrder: null, loading: true, role: 'cashier', staff: [], customers: [], cust: null, newCust: false, custQ: '', cuQ: '', orders: [], ofilter: 'active', orderQ: '', selectedOrderId: null, payBusy: false, refundId: null, refundBusy: false, payId: null, payM: 'cash', payPaid: '', note: null, orderNote: '', orderTag: '', products: [], sales: [], expenses: [], cart: {} };
 var db = null, mode = 'local', LS = 'pos_sys_v2_';
 var SB_URL = 'https://njrejjufurycusjhzfdv.supabase.co';
 var SB_KEY = 'sb_publishable_QTk_CJO1kCz53R32-JNgBg_2vTq-Lvu';
@@ -482,6 +483,19 @@ if (paid >= total) { cc.style.color = 'var(--good)'; $('#cpay-change-v').textCon
 else { cc.style.color = 'var(--bad)'; $('#cpay-change-v').textContent = money(total - paid); $('#cpay-change-l').textContent = 'ناقص'; }
 } else cc.hidden = true;
 }
+var om = $('#order-meta');
+if (om) { var oh = ''; if (S.orderTag) oh += '<button class="chip" id="om-tag" aria-pressed="true">وسم: ' + esc(S.orderTag) + ' ✕</button>'; if (S.orderNote) oh += '<button class="chip" id="om-note" aria-pressed="true">ملاحظة: ' + esc(S.orderNote) + ' ✕</button>'; om.innerHTML = oh; }
+}
+async function reprintLatest() {
+var order = S.orders.slice().sort(function (a, b) { return (b.cts || 0) - (a.cts || 0); })[0];
+if (!order) return toast('لا يوجد طلب سابق لإعادة طباعته');
+if (!confirm('إعادة طباعة إيصال آخر طلب (#' + (todayNums()[order.id] || order.number) + ') على طابعة الكاشير؟')) return;
+try {
+var pr = await sb.from('printers').select('ip,port,enabled').eq('role', 'cashier').single();
+if (pr.error) throw pr.error;
+await JuicePrint.send(order, 'cashier', todayNums()[order.id] || order.number, pr.data);
+toast('تم إرسال الإيصال للطابعة؛ راجع خروج الورقة');
+} catch (e) { toast('تعذر تأكيد الطباعة. راجع الطابعة قبل إعادة المحاولة.'); }
 }
 function openCartPay() { if (!cartItems().length || basketLocked()) return; $('#cpay-paid').value = S.paid; $('#cartpayscrim').hidden = false; renderCart(); }
 function addToCart(key) { S.cart[key] = (S.cart[key] || 0) + 1; renderPos(); }
@@ -503,7 +517,7 @@ $('#scrim').hidden = false;
 async function submitPendingOrder(){
 if(!S.pendingOrder||S.busy)return;var request=S.pendingOrder;S.busy=true;renderCart();
 try{var r=await sb.rpc('submit_pos_order',{p_request:request.id,p_payload:request.payload});if(r.error)throw r.error;if(!r.data||!r.data.saved||r.data.id!==request.id)throw new Error('ORDER_UNCONFIRMED');
-localStorage.removeItem(request.storageKey||pendingOrderKey());S.pendingOrder=null;S.cart={};S.typePicked=false;clearAdjustments();S.paid='';$('#paid').value='';S.cat=null;S.q='';$('#q').value='';S.cust=null;S.newCust=false;S.custQ='';await reload();toast(r.data.state==='active'?'تم تأكيد إرسال الطلب للمطبخ':'تم تأكيد حفظ الطلب #'+r.data.number);
+localStorage.removeItem(request.storageKey||pendingOrderKey());S.pendingOrder=null;S.cart={};S.typePicked=false;clearAdjustments();S.paid='';$('#paid').value='';S.cat=null;S.q='';$('#q').value='';S.cust=null;S.newCust=false;S.custQ='';S.orderNote='';S.orderTag='';await reload();toast(r.data.state==='active'?'تم تأكيد إرسال الطلب للمطبخ':'تم تأكيد حفظ الطلب #'+r.data.number);
 }catch(e){toast(String(e.message||'').indexOf('OPEN_TILL_REQUIRED')>=0?'افتح عهدة ثم أكمل نفس الطلب المعلّق':'لم نتأكد من الحفظ؛ أعد التحقق من نفس الطلب بعد رجوع الاتصال');}
 finally{S.busy=false;renderAll();renderCust(true);}
 }
@@ -516,7 +530,8 @@ var total=cartTotal(),paid;try{paid=state==='completed'&&S.method==='cash'?paidV
 if(!Number.isFinite(total)||total<0)return toast('راجع أسعار المنتجات والإجمالي');
 if(state==='completed'&&S.method==='cash'&&paid!==null&&paid<total)return toast('المبلغ المدفوع أقل من الإجمالي');
 var payload={items:items.map(function(i){return {b:i.b,n:i.n,z:i.z,q:i.q,p:i.price,note:i.note||''};}).concat(adjustmentItems()),total:total,method:state==='active'?'cash':S.method,paid:state==='completed'&&S.method==='cash'?paid:null,order_type:S.otype,state:state,customer:cu?{id:cu.id,name:cu.name,phone:cu.phone,address:cu.address}:null};
-var request={id:crypto.randomUUID(),storageKey:pendingOrderKey(),payload:payload,snapshot:{cart:Object.assign({},S.cart),discount:S.discount,deliveryFee:S.deliveryFee,method:S.method,otype:S.otype,paid:S.paid,cust:S.cust}};
+if(payload.items.length&&(S.orderTag||S.orderNote)){var extra=[S.orderTag,S.orderNote].filter(Boolean).join(' · ');payload.items[0].note=extra+(payload.items[0].note?' · '+payload.items[0].note:'');}
+var request={id:crypto.randomUUID(),storageKey:pendingOrderKey(),payload:payload,snapshot:{cart:Object.assign({},S.cart),discount:S.discount,deliveryFee:S.deliveryFee,method:S.method,otype:S.otype,paid:S.paid,cust:S.cust,orderNote:S.orderNote,orderTag:S.orderTag}};
 try{localStorage.setItem(pendingOrderKey(),JSON.stringify(request));}catch(e){return toast('تعذر حفظ مرجع الطلب على الجهاز؛ تأكد من توفر مساحة التخزين قبل البيع');}
 S.pendingOrder=request;return submitPendingOrder();
 }
@@ -828,7 +843,7 @@ bd.hidden = !na; bd.textContent = na;
 document.addEventListener('click', async function (e) {
 var t = e.target.closest('button'); if (!t) return;
 if(t.id==='pending-order-retry')return submitPendingOrder();
-if(basketLocked()&&(t.dataset.p||t.dataset.size||t.dataset.inc||t.dataset.dec||t.dataset.note||t.dataset.m||t.dataset.t||t.dataset.cust||['clear','discount-open','discount-apply','discount-remove','delivery-remove','note-ok','c-clear','c-save'].includes(t.id)))return toast('أكّد نتيجة الطلب المعلّق أولاً');
+if(basketLocked()&&(t.dataset.p||t.dataset.size||t.dataset.inc||t.dataset.dec||t.dataset.note||t.dataset.m||t.dataset.t||t.dataset.cust||['clear','discount-open','discount-apply','discount-remove','delivery-remove','note-ok','c-clear','c-save','ab-kitchen','ab-cancel','ab-discount','ab-notes','ab-tags','onote-ok','nav-new'].includes(t.id)))return toast('أكّد نتيجة الطلب المعلّق أولاً');
 if(S.payBusy&&(t.dataset.pm||t.id==='pay-x'))return;
 if(t.dataset.discountPreset){$('#discount-input').value=t.dataset.discountPreset;return;}
 if (t.id === 'discount-open') {$('#discount-input').value=S.discount||'';$('#discountscrim').hidden=false;$('#discount-input').focus();return;}
@@ -884,8 +899,8 @@ if (t.dataset.inc) { S.cart[t.dataset.inc]++; return renderPos(); }
 if (t.dataset.dec) { var k = t.dataset.dec; S.cart[k]--; if (S.cart[k] <= 0) delete S.cart[k]; if (!Object.keys(S.cart).length) S.typePicked = false; return renderPos(); }
 if (t.dataset.m) { S.method = t.dataset.m; return renderCart(); }
 if (t.dataset.t) { S.otype = t.dataset.t; S.typePicked = true; if(S.otype!=='delivery'){S.deliveryFee=0;$('#delivery-fee').value='';} renderCart(); renderCust(true); if (S.otype === 'delivery') { var cv2 = $('#cust'); if (cv2) setTimeout(function () { cv2.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 60); } return; }
-if(t.id==='clear'&&S.role!=='admin'&&Object.keys(S.cart).length){return CancelSecurity.open(null,function(){S.cart={};S.typePicked=false;clearAdjustments();S.paid='';$('#paid').value='';renderPos();});}
-if (t.id === 'clear') { S.cart = {}; S.typePicked = false; clearAdjustments(); S.paid = ''; $('#paid').value = ''; return renderPos(); }
+if(t.id==='clear'&&S.role!=='admin'&&Object.keys(S.cart).length){return CancelSecurity.open(null,function(){S.cart={};S.typePicked=false;clearAdjustments();S.paid='';$('#paid').value='';S.orderNote='';S.orderTag='';renderPos();});}
+if (t.id === 'clear') { S.cart = {}; S.typePicked = false; clearAdjustments(); S.paid = ''; $('#paid').value = ''; S.orderNote = ''; S.orderTag = ''; return renderPos(); }
 if (t.id === 'cu-import') { var cf = $('#cu-file'); if (cf) cf.click(); return; }
 if (t.id === 'prod-import') { var pf = $('#prod-file'); if (pf) pf.click(); return; }
 if (t.id === 'checkout') { openCartPay(); return; }
@@ -893,6 +908,24 @@ if (t.dataset.cpm) { S.method = t.dataset.cpm; return renderCart(); }
 if (t.id === 'cpay-ok') { $('#cartpayscrim').hidden = true; return checkout(); }
 if (t.id === 'cpay-x') { $('#cartpayscrim').hidden = true; return; }
 if (t.id === 'cpay-discount') { $('#discountscrim').hidden = false; return; }
+if (t.id === 'ab-kitchen') return checkout('active');
+if (t.id === 'ab-cancel') { $('#clear').click(); return; }
+if (t.id === 'ab-discount') { $('#discount-input').value = S.discount || ''; $('#discountscrim').hidden = false; return; }
+if (t.id === 'ab-print') { reprintLatest(); return; }
+if (t.id === 'ab-notes') { $('#onote-in').value = S.orderNote; $('#onotescrim').hidden = false; return; }
+if (t.id === 'onote-ok') { S.orderNote = $('#onote-in').value.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); $('#onotescrim').hidden = true; return renderCart(); }
+if (t.id === 'onote-x') { $('#onotescrim').hidden = true; return; }
+if (t.id === 'ab-tags') { $('#tag-chips').innerHTML = TAGS.map(function (c) { return '<button class="chip" data-otag="' + esc(c) + '" aria-pressed="' + String(S.orderTag === c) + '">' + esc(c) + '</button>'; }).join(''); $('#tagscrim').hidden = false; return; }
+if (t.dataset.otag) { S.orderTag = S.orderTag === t.dataset.otag ? '' : t.dataset.otag; $('#tagscrim').hidden = true; return renderCart(); }
+if (t.id === 'tag-x') { $('#tagscrim').hidden = true; return; }
+if (t.id === 'ab-more') { $('#morescrim').hidden = false; return; }
+if (t.id === 'more-x') { $('#morescrim').hidden = true; return; }
+if (t.id === 'more-print') { $('#morescrim').hidden = true; reprintLatest(); return; }
+if (t.id === 'more-printing') { $('#morescrim').hidden = true; return setView('printing'); }
+if (t.id === 'more-orders') { $('#morescrim').hidden = true; return setView('orders'); }
+if (t.id === 'om-tag') { S.orderTag = ''; return renderCart(); }
+if (t.id === 'om-note') { S.orderNote = ''; return renderCart(); }
+if (t.id === 'nav-new') { S.cat = null; S.q = ''; $('#q').value = ''; setView('pos'); if (Object.keys(S.cart).length) { $('#clear').click(); } else renderPos(); return; }
 if (t.dataset.range) { S.range = t.dataset.range; return renderAdmin(); }
 if(t.dataset.del&&t.dataset.del.startsWith('ocancel:')&&S.role!=='admin'){return CancelSecurity.open(t.dataset.del.slice(8));}
 if(t.id==='refund-confirm')return confirmRefund();
