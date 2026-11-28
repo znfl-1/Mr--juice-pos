@@ -63,7 +63,7 @@ const ipadPrint = (() => {
   let cfg={};try{cfg=JSON.parse(localStorage.getItem('mrjuice_receipt_design')||'{}')||{};}catch{}
   const width=576, pad=12, tile=document.createElement('canvas');tile.width=width;
   const c=tile.getContext('2d'), ops=[];let y=8;
-  const size=Math.round(Math.max(18,Math.min(36,Number(cfg.font_size)||26))*(k==='receipt'?1.36:k==='pickup'?1.55:1));
+  const size=Math.round(Math.max(18,Math.min(36,Number(cfg.font_size)||26))*(k==='receipt'?1.36:1.55));
   const price=n=>'EGP '+Number(n).toFixed(2);
   const type=({take:'Pick Up',delivery:'Delivery',dine:'Dine In'})[o.order_type]||'Pick Up';
   function text(t,x,align='left',px=size,bold=false,limit=552){
@@ -92,7 +92,7 @@ const ipadPrint = (() => {
   }else{pair('Type:',type);pair('Guests:','1');pair('Device:',o.created_by_name||'Cashier');pair('Date:',stamp(date).split(',')[0]);pair('Time:',new Date(date).toLocaleTimeString('en-US',{timeZone:'Africa/Cairo'}));rule();center('New');rule();}
   for(const i of items){const label=i.b?(i.b+(i.z?' '+i.z:'')):i.n;
    y+=Math.max(text(i.q,pad,'left',size,false,58),text(label,receipt?76:80,'left',size,false,receipt?265:476),receipt?text(price(i.q*i.p),564,'right',size,false,211):0);
-   if(i.note&&job.settings[receipt?'receipt_notes':'pickup_notes'])y+=text('ملاحظة: '+i.note,80,'left',22,false,470);
+   if(i.note&&job.settings[{receipt:'receipt_notes',pickup:'pickup_notes',kitchen:'kitchen_notes'}[k]])y+=text('ملاحظة: '+i.note,80,'left',22,false,470);
    if(!receipt)rule();
   }
   if(receipt){rule();const adjustments=o.items.filter(i=>i.__pos_adjustment);if(adjustments.length)pair('Subtotal',price(items.reduce((a,i)=>a+i.q*i.p,0)));
@@ -113,7 +113,7 @@ const ipadPrint = (() => {
   if(!enabled[k])return '';
   const items=o.items.filter(i=>!i.__pos_adjustment&&(receipt||s.category_routes?.[i.category||String(i.b||'').split(' · ').slice(0,-1).join(' · ')]?.[k]!==false));
   if(!receipt&&!items.length)return '';
-  if(receipt||k==='pickup')return paperLayout(job,items);
+  if(receipt||k==='pickup'||k==='kitchen')return paperLayout(job,items);
   const lines=[['Mr Juice'],['طلب #'+(o.day_number||o.number),true],[{receipt:'إيصال العميل',pickup:'تجهيز',kitchen:'المطبخ'}[k]+' · '+(TYPE[o.order_type]||'')],[dateFmt(Date.parse(o.created_at))+' · '+timeFmt(Date.parse(o.created_at))]];
   if(o.customer)lines.push([o.customer.name||''],[o.customer.phone||''],[o.customer.address||'']);
   for(const i of items){lines.push([i.q+' × '+(i.n||i.b)+(receipt?'   '+money(i.q*i.p):'')]);if(i.note&&s[{receipt:'receipt_notes',pickup:'pickup_notes',kitchen:'kitchen_notes'}[k]])lines.push(['ملاحظة: '+i.note]);}
