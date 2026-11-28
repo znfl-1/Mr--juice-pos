@@ -194,6 +194,15 @@ const ipadPrint = (() => {
    k.onclick=async()=>{if(config.kitchen){config.kitchen=false;save();draw();return;}k.disabled=true;try{const r=await sb.from('printers').select('ip').eq('role','kitchen').eq('enabled',true).single();if(r.error)throw r.error;await send(r.data.ip,'<text>MR CASHIER - KITCHEN TEST&#10;</text>');if(confirm('هل خرجت ورقة الاختبار من طابعة المطبخ؟'))config.kitchen=true;save();draw();}catch(e){notify('اختبار المطبخ: '+e.message);}finally{k.disabled=false;}};
   }draw();if(!running){running=true;setInterval(()=>{drain();drainTill();},4000);}drain();drainTill();
  }
+ window.ipadPrintIsCashierHost=()=>!!config.device;
+ window.ipadPrintOrderPaper=async(order,kind)=>{
+  const role=kind==='kitchen'?'kitchen':'cashier';
+  const pr=await sb.from('printers').select('ip').eq('role',role).eq('enabled',true).single();if(pr.error)throw pr.error;
+  const items=(order.items||[]).map(i=>({b:i.b||i.n,n:i.n,z:i.z,q:i.q,p:i.p,note:i.note||''}));
+  const adj=(order.adjustments||[]).map(a=>({__pos_adjustment:true,n:a.n,kind:a.kind,amount:a.amount}));
+  const job={kind:kind,settings:{receipt_notes:true,pickup_notes:true,kitchen_notes:true},order:{number:order.number,day_number:order.day_number,created_at:order.created_at||new Date(order.cts||Date.now()).toISOString(),created_by_name:order.createdByName||'',paid_by_name:order.paidByName||'',order_type:order.type||order.order_type||'dine',method:order.method||'cash',total:order.total,paid:order.paid==null?null:order.paid,customer:order.customer||null,items:items.concat(adj)}};
+  await send(pr.data.ip,await paperLayout(job,items));
+ };
  return {transport,mount};
 })();
 var recoveryReturn = new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
@@ -491,9 +500,8 @@ var order = S.orders.slice().sort(function (a, b) { return (b.cts || 0) - (a.cts
 if (!order) return toast('لا يوجد طلب سابق لإعادة طباعته');
 if (!confirm('إعادة طباعة إيصال آخر طلب (#' + (todayNums()[order.id] || order.number) + ') على طابعة الكاشير؟')) return;
 try {
-var pr = await sb.from('printers').select('ip,port,enabled').eq('role', 'cashier').single();
-if (pr.error) throw pr.error;
-await JuicePrint.send(order, 'cashier', todayNums()[order.id] || order.number, pr.data);
+if (window.ipadPrintOrderPaper) { await window.ipadPrintOrderPaper({ number: todayNums()[order.id] || order.number, cts: order.cts, type: order.type, method: order.method, total: order.total, paid: order.paid, customer: order.customer, items: order.items, adjustments: order.adjustments, createdByName: order.createdByName, paidByName: order.paidByName }, 'receipt'); }
+else { var pr = await sb.from('printers').select('ip,port,enabled').eq('role', 'cashier').single(); if (pr.error) throw pr.error; await JuicePrint.send(order, 'cashier', todayNums()[order.id] || order.number, pr.data); }
 toast('تم إرسال الإيصال للطابعة؛ راجع خروج الورقة');
 } catch (e) { toast('تعذر تأكيد الطباعة. راجع الطابعة قبل إعادة المحاولة.'); }
 }
@@ -557,7 +565,7 @@ var acts = '';
 if (x.state === 'active' && S.role==='admin') acts=delBtn('ocancel',x.id,'إلغاء');
 else if (x.state === 'active') acts = '<button class="btn sm" data-pay="' + esc(x.id) + '">قفل التذكرة</button>' + delBtn('ocancel', x.id, 'إلغاء');
 else if (x.state === 'completed' && S.role === 'admin') acts = delBtn('orefund', x.id, 'مرتجع');
-if (window.JuicePrint && JuicePrint.available && (x.state === 'active' || x.state === 'completed')) {
+if (((window.JuicePrint && JuicePrint.available) || window.ipadPrintOrderPaper) && (x.state === 'active' || x.state === 'completed')) {
 acts += '<button class="btn sm" data-print="' + esc(x.id) + '" data-role="kitchen">طباعة المطبخ</button>';
 if (x.state === 'completed') acts += '<button class="btn sm" data-print="' + esc(x.id) + '" data-role="cashier">طباعة الإيصال</button>';
 }
@@ -812,6 +820,7 @@ var btn = $('#pay-ok'); S.payBusy=true;btn.disabled = true;
 try {
 await orderUpdate(o.id, { state: 'completed', method: S.payM, paid: S.payM === 'cash' && paid!==null ? paid : null });
 $('#payscrim').hidden = true; S.payId = null; toast('تم تحصيل الطلب ' + money(o.total));
+try { if (window.ipadPrintOrderPaper && window.ipadPrintIsCashierHost && window.ipadPrintIsCashierHost()) { window.ipadPrintOrderPaper({ number: todayNums()[o.id] || o.number, cts: o.cts, type: o.type, method: S.payM, total: o.total, paid: S.payM === 'cash' && paid !== null ? paid : null, customer: o.customer, items: o.items, adjustments: o.adjustments, createdByName: o.createdByName, paidByName: o.paidByName }, 'receipt').catch(function (e) { toast('اتحصّل الطلب بس الإيصال متطبعش: ' + e.message); }); } } catch (e) {}
 } catch (e) { toast('تعذر التحصيل، ربما الطلب اتغيّر. حدّث الصفحة'); }
 S.payBusy=false;btn.disabled = false;
 }
@@ -871,7 +880,9 @@ t.disabled = true;
 try {
 var pr = await sb.from('printers').select('ip,port,enabled').eq('role', t.dataset.role).single();
 if (pr.error) throw pr.error;
-await JuicePrint.send(order, t.dataset.role, todayNums()[order.id] || order.number, pr.data);
+if (window.JuicePrint && JuicePrint.available) { await JuicePrint.send(order, t.dataset.role, todayNums()[order.id] || order.number, pr.data); }
+else if (window.ipadPrintOrderPaper) { await window.ipadPrintOrderPaper({ number: todayNums()[order.id] || order.number, cts: order.cts, type: order.type, method: order.method, total: order.total, paid: order.paid, customer: order.customer, items: order.items, adjustments: order.adjustments, createdByName: order.createdByName, paidByName: order.paidByName }, t.dataset.role === 'kitchen' ? 'kitchen' : 'receipt'); }
+else throw new Error('no print path');
 toast('تم إرسال البيانات للطابعة؛ راجع خروج الورقة');
 } catch (err) { toast('تعذر تأكيد الطباعة. راجع الطابعة قبل إعادة المحاولة.'); }
 finally { t.disabled = false; }
